@@ -130,7 +130,9 @@ export default function (pi: ExtensionAPI) {
         if (choice.startsWith("🔄 Reset")) {
           const ok = await ctx.ui.confirm("Reset?", "Reset all subagent models to defaults?");
           if (ok) {
-            Object.assign(config.models, DEFAULT_CONFIG.models);
+            for (const r of ROLES) {
+              config.models[r] = { ...DEFAULT_CONFIG.models[r] };
+            }
             configChanged = true;
             ctx.ui.notify("Models reset to defaults (save to persist)", "info");
           }
