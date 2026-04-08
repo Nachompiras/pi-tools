@@ -38,7 +38,7 @@ export function readSubagentModelConfig(): ModelConfig {
     const dir = dirname(CONFIG_PATH);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
-    return { ...DEFAULT_CONFIG };
+    return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   }
 
   const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) as Partial<ModelConfig> & {
@@ -52,18 +52,34 @@ export function readSubagentModelConfig(): ModelConfig {
   const merged: ModelConfig = {
     description: config.description || DEFAULT_CONFIG.description,
     models: {
-      cheap: config.models?.cheap ?? DEFAULT_CONFIG.models.cheap,
-      implementer: config.models?.implementer ?? {
-        model: cheapModel ?? DEFAULT_CONFIG.models.implementer.model,
-        description: DEFAULT_CONFIG.models.implementer.description,
+      cheap: {
+        model: config.models?.cheap?.model ?? DEFAULT_CONFIG.models.cheap.model,
+        description: config.models?.cheap?.description ?? DEFAULT_CONFIG.models.cheap.description,
       },
-      standard: config.models?.standard ?? DEFAULT_CONFIG.models.standard,
-      capable: config.models?.capable ?? DEFAULT_CONFIG.models.capable,
+      implementer: {
+        model: config.models?.implementer?.model ?? cheapModel ?? DEFAULT_CONFIG.models.implementer.model,
+        description: config.models?.implementer?.description ?? DEFAULT_CONFIG.models.implementer.description,
+      },
+      standard: {
+        model: config.models?.standard?.model ?? DEFAULT_CONFIG.models.standard.model,
+        description: config.models?.standard?.description ?? DEFAULT_CONFIG.models.standard.description,
+      },
+      capable: {
+        model: config.models?.capable?.model ?? DEFAULT_CONFIG.models.capable.model,
+        description: config.models?.capable?.description ?? DEFAULT_CONFIG.models.capable.description,
+      },
     },
   };
 
-  // Persist whenever any role was missing so the file stays fully normalised.
-  const needsWrite = ROLES.some((role) => !config.models?.[role]);
+  // Persist whenever any role or field was missing so the file stays fully normalised.
+  const needsWrite =
+    !config.description ||
+    ROLES.some(
+      (role) =>
+        !config.models?.[role] ||
+        !config.models[role]!.model ||
+        !config.models[role]!.description
+    );
   if (needsWrite) {
     writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
   }
