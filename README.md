@@ -36,8 +36,8 @@ Also exposes tools:
 Default models:
 - **cheap**: `minimax/minimax-m2.7` - Mechanical implementation tasks
 - **implementer**: `minimax/minimax-m2.7` - Implementation tasks, code writing, and mechanical coding work
-- **standard**: `anthropic/claude-sonnet-4.6` - Integration tasks, multi-file coordination
-- **capable**: `anthropic/claude-opus-4.6` - Architecture, design, review tasks
+- **standard**: `anthropic/claude-sonnet-4.6` - Reviews, integration tasks, multi-file coordination, debugging
+- **capable**: `anthropic/claude-opus-4.6` - Architecture, design, planning, broad codebase understanding
 
 ### Extension: Subagent
 
@@ -55,6 +55,8 @@ Agent resolution priority:
 1. Project-local `.pi/agents`
 2. User-level `~/.pi/agent/agents`
 3. Packaged fallback agents from this package
+
+Packaged fallback role mapping: `scout` → `cheap`, `worker` → `implementer`, `reviewer` → `standard`, `planner` → `capable`
 
 ### Skills
 
