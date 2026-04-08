@@ -26,7 +26,7 @@ pi update
 
 Configure models for subagent-driven-development skill. Provides interactive commands:
 
-- `/subagent-config` - Interactively configure models for each role (cheap, standard, capable)
+- `/subagent-config` - Interactively configure models for each role (cheap, implementer, standard, capable)
 - `/subagent-models` - Show current model configuration
 
 Also exposes tools:
@@ -35,6 +35,7 @@ Also exposes tools:
 
 Default models:
 - **cheap**: `minimax/minimax-m2.7` - Mechanical implementation tasks
+- **implementer**: `minimax/minimax-m2.7` - Implementation tasks, code writing, and mechanical coding work
 - **standard**: `anthropic/claude-sonnet-4.6` - Integration tasks, multi-file coordination
 - **capable**: `anthropic/claude-opus-4.6` - Architecture, design, review tasks
 

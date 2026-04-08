@@ -45,21 +45,26 @@ export function readSubagentModelConfig(): ModelConfig {
     models?: Partial<ModelConfig["models"]>;
   };
 
+  // Build merged config: each role falls back to its default if missing/incomplete.
+  // For implementer specifically, also seed from cheap.model when first added so
+  // users who had no implementer key get a sensible starting point.
+  const cheapModel = config.models?.cheap?.model;
   const merged: ModelConfig = {
     description: config.description || DEFAULT_CONFIG.description,
     models: {
-      cheap: config.models?.cheap || DEFAULT_CONFIG.models.cheap,
-      implementer:
-        config.models?.implementer || {
-          model: config.models?.cheap?.model || DEFAULT_CONFIG.models.implementer.model,
-          description: config.models?.cheap?.description || DEFAULT_CONFIG.models.implementer.description,
-        },
-      standard: config.models?.standard || DEFAULT_CONFIG.models.standard,
-      capable: config.models?.capable || DEFAULT_CONFIG.models.capable,
+      cheap: config.models?.cheap ?? DEFAULT_CONFIG.models.cheap,
+      implementer: config.models?.implementer ?? {
+        model: cheapModel ?? DEFAULT_CONFIG.models.implementer.model,
+        description: DEFAULT_CONFIG.models.implementer.description,
+      },
+      standard: config.models?.standard ?? DEFAULT_CONFIG.models.standard,
+      capable: config.models?.capable ?? DEFAULT_CONFIG.models.capable,
     },
   };
 
-  if (!config.models?.implementer) {
+  // Persist whenever any role was missing so the file stays fully normalised.
+  const needsWrite = ROLES.some((role) => !config.models?.[role]);
+  if (needsWrite) {
     writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
   }
 

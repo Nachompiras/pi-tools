@@ -5,8 +5,8 @@ Use this template when dispatching an implementer subagent.
 ## Dispatch Example (Pi)
 
 ```bash
-# Get model from config
-MODEL=$(cat ~/.pi/agent/subagent-models.json | jq -r '.models.[cheap|standard].model')
+# Get model from config (implementer role = dedicated coding role; falls back to cheap for mechanical tasks)
+MODEL=$(cat ~/.pi/agent/subagent-models.json | jq -r '.models.implementer.model')
 
 # Dispatch
 pi --model "$MODEL" 'You are implementing Task 1: [task name]. Task description: [full text]. Context: [scene-setting]. Work from: [directory].'
