@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 
 export const CONFIG_PATH = join(process.env.HOME || "", ".pi/agent/subagent-models.json");
 
-export type Role = "cheap" | "standard" | "capable";
-export const ROLES: Role[] = ["cheap", "standard", "capable"];
+export type Role = "cheap" | "implementer" | "standard" | "capable";
+export const ROLES: Role[] = ["cheap", "implementer", "standard", "capable"];
 
 export interface ModelConfig {
   description: string;
@@ -17,6 +17,10 @@ export const DEFAULT_CONFIG: ModelConfig = {
     cheap: {
       model: "openrouter/minimax/minimax-m2.7",
       description: "Mechanical implementation tasks, isolated functions, clear specs, 1-2 files",
+    },
+    implementer: {
+      model: "openrouter/minimax/minimax-m2.7",
+      description: "Implementation tasks, code writing, and mechanical coding work",
     },
     standard: {
       model: "openrouter/anthropic/claude-sonnet-4.6",
@@ -36,7 +40,30 @@ export function readSubagentModelConfig(): ModelConfig {
     writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
     return { ...DEFAULT_CONFIG };
   }
-  return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+
+  const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) as Partial<ModelConfig> & {
+    models?: Partial<ModelConfig["models"]>;
+  };
+
+  const merged: ModelConfig = {
+    description: config.description || DEFAULT_CONFIG.description,
+    models: {
+      cheap: config.models?.cheap || DEFAULT_CONFIG.models.cheap,
+      implementer:
+        config.models?.implementer || {
+          model: config.models?.cheap?.model || DEFAULT_CONFIG.models.implementer.model,
+          description: config.models?.cheap?.description || DEFAULT_CONFIG.models.implementer.description,
+        },
+      standard: config.models?.standard || DEFAULT_CONFIG.models.standard,
+      capable: config.models?.capable || DEFAULT_CONFIG.models.capable,
+    },
+  };
+
+  if (!config.models?.implementer) {
+    writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
+  }
+
+  return merged;
 }
 
 export function writeSubagentModelConfig(config: ModelConfig): void {

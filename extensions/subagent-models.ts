@@ -15,6 +15,7 @@ import {
 
 const ROLE_ICONS: Record<Role, string> = {
   cheap: "⚡",
+  implementer: "🛠️",
   standard: "🔧",
   capable: "🧠",
 };
@@ -184,7 +185,7 @@ export default function (pi: ExtensionAPI) {
     name: "get_subagent_models",
     label: "Get Subagent Models",
     description:
-      "Get the current subagent model configuration. Returns the model mapping for cheap, standard, and capable roles.",
+      "Get the current subagent model configuration. Returns the model mapping for cheap, implementer, standard, and capable roles.",
     parameters: Type.Object({}),
     async execute() {
       const config = readConfig();
@@ -201,8 +202,8 @@ export default function (pi: ExtensionAPI) {
     description:
       "Update the model for a specific subagent role. Use this when the user wants to experiment with different models.",
     parameters: Type.Object({
-      role: StringEnum(["cheap", "standard", "capable"] as const, {
-        description: "Role to update: cheap, standard, or capable",
+      role: StringEnum(["cheap", "implementer", "standard", "capable"] as const, {
+        description: "Role to update: cheap, implementer, standard, or capable",
       }),
       model: Type.String({
         description: "New model identifier (e.g., openrouter/anthropic/claude-opus-4.6)",
