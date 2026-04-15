@@ -42,11 +42,7 @@ window.PiRemote.ModeView = {
           <span class="mode-btn-label">Mirror</span>
           <span class="mode-btn-desc">See and control the active terminal session</span>
         </button>
-        <button class="mode-btn" id="mode-independent">
-          <span class="mode-btn-icon">🔧</span>
-          <span class="mode-btn-label">Independent</span>
-          <span class="mode-btn-desc">Start a new separate session</span>
-        </button>
+
       </div>
     `;
 
@@ -54,8 +50,6 @@ window.PiRemote.ModeView = {
       this.connectWithMode('mirror');
     });
 
-    document.getElementById('mode-independent').addEventListener('click', () => {
-      this.connectWithMode('independent');
-    });
+
   }
 };
