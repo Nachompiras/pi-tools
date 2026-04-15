@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Nacho's superpowers: brainstorming, systematic debugging, Rust skills, and more",
   "keywords": ["pi-package"],
+  "scripts": {
+    "postinstall": "for dir in extensions/*/; do if [ -f \"$dir/package.json\" ]; then echo \"Installing deps for $dir...\" && npm install --prefix \"$dir\"; fi; done"
+  },
   "pi": {
     "extensions": ["./extensions"],
     "skills": ["./skills"],
