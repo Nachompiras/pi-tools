@@ -1,0 +1,5 @@
+# Downloaded sprite cache (auto-fetched from PMD Collab API)
+sprites/
+
+# Compiled Swift binary
+.build/
