@@ -1,0 +1,5 @@
+# Dependencies (installed via npm/pnpm)
+node_modules/
+
+# Lock file (regenerated on install)
+package-lock.json

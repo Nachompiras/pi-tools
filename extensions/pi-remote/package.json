@@ -1,0 +1,19 @@
+{
+  "name": "pi-remote",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote control pi from your phone",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.2"
+  }
+}
