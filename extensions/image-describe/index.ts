@@ -238,8 +238,33 @@ export default function (pi: ExtensionAPI) {
       return undefined;
     }
 
-    // Show toast and start footer spinner
-    const label = imageRefs.length === 1 ? "1 image" : `${imageRefs.length} images`;
+    // Deep-clone messages so we can mutate safely
+    const messages = JSON.parse(JSON.stringify(event.messages));
+
+    // Fingerprint on raw data — stable across turns since message history doesn't change.
+    // Separate cache hits (replace immediately, no API call) from misses (need description).
+    type PendingRef = ImageRef & { fp: string };
+    const pending: PendingRef[] = [];
+
+    for (const ref of imageRefs) {
+      const fp = fingerprint(ref.data, ref.mimeType);
+      const cached = descriptionCache.get(fp);
+      if (cached) {
+        // Already described in this session — replace silently, no toast needed
+        (messages[ref.msgIndex] as any).content[ref.blockIndex] = {
+          type: "text",
+          text: `[Image description: ${cached}]`,
+        };
+      } else {
+        pending.push({ ...ref, fp });
+      }
+    }
+
+    // All images were cached — return early with no toast or spinner
+    if (pending.length === 0) return { messages };
+
+    // Only show toast + spinner for images that actually need describing
+    const label = pending.length === 1 ? "1 image" : `${pending.length} images`;
     ctx.ui.notify(`Describing ${label} with ${model.provider}/${model.id}...`, "info");
 
     let spinnerIdx = 0;
@@ -248,37 +273,29 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("image-describe", `${SPINNER_FRAMES[spinnerIdx]} ${model.provider}/${model.id}`);
     }, 150);
 
-    // Deep-clone messages so we can mutate safely
-    const messages = JSON.parse(JSON.stringify(event.messages));
-
     try {
-      // Describe each image (use cache when possible)
-      for (const ref of imageRefs) {
-        // Compress before fingerprinting so cache key is stable post-compression
+      for (const ref of pending) {
+        // Compress only on cache miss
         const compressed = await compressImage(ref.data, ref.mimeType);
-        const fp = fingerprint(compressed.data, compressed.mimeType);
-        let description = descriptionCache.get(fp);
-
-        if (!description) {
-          try {
-            description = await describeImage(
-              compressed.data,
-              compressed.mimeType,
-              model,
-              auth.apiKey ?? "",
-              auth.headers,
-              ctx.signal,
-            );
-            descriptionCache.set(fp, description);
-          } catch (err) {
-            ctx.ui.notify(`image-describe: failed to describe image — ${(err as Error).message}`, "error");
-            // Replace with a text fallback so the non-vision model doesn't receive a raw image block
-            (messages[ref.msgIndex] as any).content[ref.blockIndex] = {
-              type: "text",
-              text: `[Image: could not be described — ${(err as Error).message}]`,
-            };
-            continue;
-          }
+        let description: string;
+        try {
+          description = await describeImage(
+            compressed.data,
+            compressed.mimeType,
+            model,
+            auth.apiKey ?? "",
+            auth.headers,
+            ctx.signal,
+          );
+          descriptionCache.set(ref.fp, description);
+        } catch (err) {
+          ctx.ui.notify(`image-describe: failed to describe image — ${(err as Error).message}`, "error");
+          // Replace with a text fallback so the non-vision model doesn't receive a raw image block
+          (messages[ref.msgIndex] as any).content[ref.blockIndex] = {
+            type: "text",
+            text: `[Image: could not be described — ${(err as Error).message}]`,
+          };
+          continue;
         }
 
         // Replace image block with text block
