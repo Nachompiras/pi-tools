@@ -7,9 +7,13 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 ## Overview
 
-Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything they need to know: which files to touch for each task, code, testing, docs they might need to check, how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
+Write implementation plans as a **TODO list of well-defined tasks**, not as pre-written code. Document what each task must achieve, the contracts/interfaces it touches, the behavior to verify, and the references the engineer should consult. The engineer writes the actual code following TDD — you define the targets, not the keystrokes.
 
-Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
+Document for each task: which files to touch, the interfaces/contracts involved, the behavior and acceptance criteria, docs they might need to check, and how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
+
+Assume they are a competent developer who will write the implementation themselves. They know almost nothing about our toolset, problem domain, or where things live — so be explicit about paths, contracts, and expected behavior. But do **not** spell out function bodies or full test files for them: define the contract and the behavior, and let them implement it test-first.
+
+**The default is to describe, not to pre-write code.** Write literal code only when that code *is* the definition (see "When to Show Code" below).
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
@@ -33,12 +37,30 @@ Before defining tasks, map out which files will be created or modified and what 
 
 This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
 
+## When to Show Code
+
+The plan describes behavior and defines contracts. It does **not** contain the implementation. Use this rule to decide whether a code block belongs in the plan:
+
+**Show literal code only when the code IS the definition** — i.e. it's a contract the engineer must match exactly:
+- Function/method **signatures** (name, params, return type) — but not their bodies
+- Type/struct/interface/enum definitions, schemas, API request/response shapes
+- Config keys, constants, or enum values that other code depends on
+- Exact shell commands to run
+- Commit messages
+
+**Describe instead of showing code** for everything the engineer implements:
+- Function bodies / algorithm steps → describe the behavior and edge cases in prose
+- Tests → describe what to assert (Given/When/Then or a bullet list of cases), don't write the test file
+- Wiring/glue code → describe what connects to what
+
+The litmus test: *"Is this code something the engineer must reproduce verbatim, or something they should write themselves?"* Only the former goes in the plan.
+
 ## Bite-Sized Task Granularity
 
-**Each step is one action (2-5 minutes):**
-- "Write the failing test" - step
+**Each step is one action (2-5 minutes), phrased as an instruction — not as pre-written code:**
+- "Write a failing test for [specific behavior]" - step (describe the cases, don't write the test)
 - "Run it to make sure it fails" - step
-- "Implement the minimal code to make the test pass" - step
+- "Implement [function] to satisfy the test" - step (reference the contract, don't write the body)
 - "Run the tests and make sure they pass" - step
 - "Commit" - step
 
@@ -62,6 +84,8 @@ This structure informs the task decomposition. Each task should produce self-con
 
 ## Task Structure
 
+Each task defines a target: the files, the contract, the behavior to verify, and acceptance criteria. The engineer fills in the code test-first.
+
 ````markdown
 ### Task N: [Component Name]
 
@@ -70,25 +94,30 @@ This structure informs the task decomposition. Each task should produce self-con
 - Modify: `exact/path/to/existing.py:123-145`
 - Test: `tests/exact/path/to/test.py`
 
-- [ ] **Step 1: Write the failing test**
+**Contract** (the signature/types the engineer must match — this IS the definition):
 
 ```python
-def test_specific_behavior():
-    result = function(input)
-    assert result == expected
+def compute_discount(cart: Cart, coupon: Coupon | None) -> Money: ...
 ```
+
+**References:** [existing patterns to follow, e.g. `src/pricing/tax.py` for the Money usage; relevant docs]
+
+- [ ] **Step 1: Write the failing test**
+
+Test `compute_discount` covers:
+- No coupon → returns zero discount
+- Percentage coupon → applies percent to cart subtotal
+- Coupon above cart total → discount capped at subtotal (never negative)
+- Expired coupon → raises `CouponExpired`
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/path/test.py::test_name -v`
 Expected: FAIL with "function not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement `compute_discount` to satisfy the test**
 
-```python
-def function(input):
-    return expected
-```
+Apply the coupon to the cart subtotal per the cases above. Cap the result at the subtotal; raise `CouponExpired` for expired coupons. Reuse `Money` arithmetic from `src/pricing/tax.py`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -99,9 +128,11 @@ Expected: PASS
 
 ```bash
 git add tests/path/test.py src/path/file.py
-git commit -m "feat: add specific feature"
+git commit -m "feat: add discount computation"
 ```
 ````
+
+Note how only the **signature** and the **commands** are literal code. The test cases and the implementation are *described*, because the engineer writes those test-first.
 
 ## Write in Parts — Never All at Once
 
@@ -114,19 +145,24 @@ git commit -m "feat: add specific feature"
 
 **Between each task, write the task directly to the file using a tool call (write/edit) — do not buffer tasks in memory.** If the connection drops mid-plan, the file will have whatever was written so far and work can resume.
 
-## No Placeholders
+## No Vague Placeholders
 
-Every step must contain the actual content an engineer needs. These are **plan failures** — never write them:
-- "TBD", "TODO", "implement later", "fill in details"
-- "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without actual test code)
-- "Similar to Task N" (repeat the code — the engineer may be reading tasks out of order)
-- Steps that describe what to do without showing how (code blocks required for code steps)
-- References to types, functions, or methods not defined in any task
+Describing behavior is good. Being *vague* is the failure. The difference: a good description names the concrete cases and outcomes; a placeholder gestures at work without specifying it.
+
+These are **plan failures** — never write them:
+- "TBD", "TODO: implement later", "fill in details"
+- "Add appropriate error handling" → instead: name *which* errors and what happens ("raise `CouponExpired` for expired coupons; reject negative quantities with `ValueError`")
+- "Handle edge cases" → instead: list the actual edge cases
+- "Write tests for the above" → instead: list the specific cases to assert
+- "Similar to Task N" → instead: name the behavior explicitly (the engineer may read tasks out of order). You may *reference* a contract defined elsewhere, but restate the behavior.
+- References to types/functions/methods whose contract is never defined in any task
+
+**Allowed (and encouraged):** describing what a function does and what its tests assert, in prose, instead of writing the code. That is not a placeholder — it's the point.
 
 ## Remember
 - Exact file paths always
-- Complete code in every step — if a step changes code, show the code
+- Define contracts (signatures, types, schemas) as literal code; describe behavior and tests in prose
+- The engineer writes the implementation and the tests test-first — the plan is the target, not the code
 - Exact commands with expected output
 - DRY, YAGNI, TDD, frequent commits
 
@@ -136,7 +172,7 @@ After writing the complete plan, look at the spec with fresh eyes and check the 
 
 **1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
 
-**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
+**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Vague Placeholders" section above. Also check the reverse: are you pre-writing implementation code or full test files that the engineer should write themselves? If so, replace it with a contract + behavior description (see "When to Show Code"). Fix both directions.
 
 **3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
 

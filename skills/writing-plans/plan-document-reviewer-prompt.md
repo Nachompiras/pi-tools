@@ -19,10 +19,11 @@ Task tool (general-purpose):
 
     | Category | What to Look For |
     |----------|------------------|
-    | Completeness | TODOs, placeholders, incomplete tasks, missing steps |
+    | Completeness | Vague placeholders ("handle edge cases", "add error handling"), incomplete tasks, missing steps |
+    | Right level of detail | Plan defines contracts (signatures/types/schemas) + behavior, but does NOT pre-write implementation bodies or full test files. Flag tasks that dump code the engineer should write test-first. |
     | Spec Alignment | Plan covers spec requirements, no major scope creep |
     | Task Decomposition | Tasks have clear boundaries, steps are actionable |
-    | Buildability | Could an engineer follow this plan without getting stuck? |
+    | Buildability | Could an engineer follow this plan and implement it test-first without getting stuck? |
 
     ## Calibration
 
