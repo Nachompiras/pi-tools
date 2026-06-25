@@ -29,4 +29,32 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", () => {
     descriptionCache.clear();
   });
+
+  // Intercept messages before they reach the LLM
+  pi.on("context", async (event, ctx) => {
+    // If the active model supports images, do nothing
+    if (!ctx.model || ctx.model.input.includes("image")) {
+      return undefined;
+    }
+
+    // Count images across all messages
+    let imageCount = 0;
+    for (const msg of event.messages) {
+      if ("content" in msg && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (typeof block === "object" && block !== null && (block as any).type === "image") {
+            imageCount++;
+          }
+        }
+      }
+    }
+
+    // No images found — nothing to do
+    if (imageCount === 0) {
+      return undefined;
+    }
+
+    // (description logic comes in Task 3)
+    return undefined;
+  });
 }
