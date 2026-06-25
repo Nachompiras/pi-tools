@@ -24,6 +24,43 @@ function fingerprint(data: string, mimeType: string): string {
   return `${mimeType}:${data.slice(0, 100)}`;
 }
 
+/**
+ * Call the vision model to describe a single image.
+ * Returns the description string, or throws on failure.
+ */
+async function describeImage(
+  data: string,
+  mimeType: string,
+  model: { provider: string; id: string },
+  apiKey: string,
+  headers: Record<string, string> | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  const userMessage: UserMessage = {
+    role: "user",
+    content: [
+      { type: "image", data, mimeType },
+      { type: "text", text: "Describe this image in detail. Be concise but thorough. Focus on content relevant to a software development context if applicable." },
+    ] as any,
+    timestamp: Date.now(),
+  };
+
+  const response = await complete(
+    model as any,
+    { messages: [userMessage] },
+    { apiKey, headers, signal },
+  );
+
+  if (response.stopReason === "aborted") {
+    throw new Error("Vision model call aborted");
+  }
+
+  return response.content
+    .filter((c): c is { type: "text"; text: string } => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
+
 export default function (pi: ExtensionAPI) {
   // Clear cache on every session start
   pi.on("session_start", () => {
@@ -37,24 +74,77 @@ export default function (pi: ExtensionAPI) {
       return undefined;
     }
 
-    // Count images across all messages
-    let imageCount = 0;
-    for (const msg of event.messages) {
-      if ("content" in msg && Array.isArray(msg.content)) {
-        for (const block of msg.content) {
-          if (typeof block === "object" && block !== null && (block as any).type === "image") {
-            imageCount++;
-          }
+    // Collect image positions: { msgIndex, blockIndex, data, mimeType }
+    type ImageRef = { msgIndex: number; blockIndex: number; data: string; mimeType: string };
+    const imageRefs: ImageRef[] = [];
+
+    for (let mi = 0; mi < event.messages.length; mi++) {
+      const msg = event.messages[mi];
+      if (!("content" in msg) || !Array.isArray(msg.content)) continue;
+      for (let bi = 0; bi < msg.content.length; bi++) {
+        const block = msg.content[bi] as any;
+        if (block?.type === "image" && typeof block.data === "string") {
+          imageRefs.push({ msgIndex: mi, blockIndex: bi, data: block.data, mimeType: block.mimeType ?? "image/png" });
         }
       }
     }
 
-    // No images found — nothing to do
-    if (imageCount === 0) {
+    if (imageRefs.length === 0) return undefined;
+
+    // Resolve vision model from registry
+    const model = ctx.modelRegistry.find(visionModel.provider, visionModel.id);
+    if (!model) {
+      ctx.ui.notify(`image-describe: vision model ${visionModel.provider}/${visionModel.id} not found in registry`, "error");
       return undefined;
     }
 
-    // (description logic comes in Task 3)
-    return undefined;
+    // Resolve API key
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok || !auth.apiKey) {
+      ctx.ui.notify(
+        `image-describe: no API key for ${visionModel.provider}/${visionModel.id} — images will be dropped`,
+        "error",
+      );
+      return undefined;
+    }
+
+    // Show toast
+    const label = imageRefs.length === 1 ? "1 imagen" : `${imageRefs.length} imágenes`;
+    ctx.ui.notify(`Describiendo ${label} con ${visionModel.provider}/${visionModel.id}...`, "info");
+
+    // Deep-clone messages so we can mutate safely
+    const messages = JSON.parse(JSON.stringify(event.messages));
+
+    // Describe each image (use cache when possible)
+    for (const ref of imageRefs) {
+      const fp = fingerprint(ref.data, ref.mimeType);
+      let description = descriptionCache.get(fp);
+
+      if (!description) {
+        try {
+          description = await describeImage(
+            ref.data,
+            ref.mimeType,
+            visionModel,
+            auth.apiKey,
+            auth.headers,
+            ctx.signal,
+          );
+          descriptionCache.set(fp, description);
+        } catch (err) {
+          ctx.ui.notify(`image-describe: failed to describe image — ${(err as Error).message}`, "error");
+          // Leave block as-is by skipping replacement
+          continue;
+        }
+      }
+
+      // Replace image block with text block
+      (messages[ref.msgIndex] as any).content[ref.blockIndex] = {
+        type: "text",
+        text: `[Image description: ${description}]`,
+      };
+    }
+
+    return { messages };
   });
 }
