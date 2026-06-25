@@ -13,8 +13,34 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 /** Fingerprint → description cache, cleared each session */
 const descriptionCache = new Map<string, string>();
 
-/** Currently configured vision model */
-let visionModel = { provider: "minimax", id: "minimax-m3" };
+/**
+ * Currently configured vision model search string.
+ * Matched against model IDs using substring search across all registered models.
+ * Supports both exact provider/id format (e.g. "minimax/minimax-m3") and
+ * bare id strings (e.g. "minimax-m3") for OpenRouter-style registrations.
+ */
+let visionModelQuery = "minimax/minimax-m3";
+
+/**
+ * Find a vision-capable model by searching for `query` as a substring of model IDs
+ * across all providers. Returns the first match whose `input` includes "image".
+ * Falls back to exact provider+id lookup for backwards compatibility.
+ */
+function findVisionModel(registry: { getAll(): Array<{ id: string; provider: string; input: string[] }>; find(p: string, id: string): any }, query: string) {
+  // Try exact provider/id first
+  const slash = query.indexOf("/");
+  if (slash !== -1) {
+    const exact = registry.find(query.slice(0, slash), query.slice(slash + 1));
+    if (exact) return exact;
+  }
+
+  // Fall back to substring search across all models (handles OpenRouter where
+  // provider="openrouter" but model id contains the original "provider/model" string)
+  const all = registry.getAll();
+  return all.find(
+    (m) => m.input.includes("image") && m.id.toLowerCase().includes(query.toLowerCase()),
+  );
+}
 
 /**
  * Derive a short fingerprint from an image block.
@@ -91,10 +117,10 @@ export default function (pi: ExtensionAPI) {
 
     if (imageRefs.length === 0) return undefined;
 
-    // Resolve vision model from registry
-    const model = ctx.modelRegistry.find(visionModel.provider, visionModel.id);
+    // Resolve vision model from registry (substring search to support OpenRouter)
+    const model = findVisionModel(ctx.modelRegistry, visionModelQuery);
     if (!model) {
-      ctx.ui.notify(`image-describe: vision model ${visionModel.provider}/${visionModel.id} not found in registry`, "error");
+      ctx.ui.notify(`image-describe: no vision model matching "${visionModelQuery}" found in registry`, "error");
       return undefined;
     }
 
@@ -102,7 +128,7 @@ export default function (pi: ExtensionAPI) {
     const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
     if (!auth.ok || !auth.apiKey) {
       ctx.ui.notify(
-        `image-describe: no API key for ${visionModel.provider}/${visionModel.id} — images will be dropped`,
+        `image-describe: no API key for ${model.provider}/${model.id} — images will be dropped`,
         "error",
       );
       return undefined;
@@ -110,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 
     // Show toast
     const label = imageRefs.length === 1 ? "1 image" : `${imageRefs.length} images`;
-    ctx.ui.notify(`Describing ${label} with ${visionModel.provider}/${visionModel.id}...`, "info");
+    ctx.ui.notify(`Describing ${label} with ${model.provider}/${model.id}...`, "info");
 
     // Deep-clone messages so we can mutate safely
     const messages = JSON.parse(JSON.stringify(event.messages));
@@ -125,7 +151,7 @@ export default function (pi: ExtensionAPI) {
           description = await describeImage(
             ref.data,
             ref.mimeType,
-            visionModel,
+            model,
             auth.apiKey,
             auth.headers,
             ctx.signal,
@@ -153,41 +179,28 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("image-describe-model", {
-    description: "Set the vision model used to describe images. Usage: /image-describe-model provider/model-id",
+    description: "Set the vision model query string for image descriptions. Usage: /image-describe-model <query> (e.g. minimax/minimax-m3)",
     handler: async (args, ctx) => {
       const input = args?.trim();
       if (!input) {
+        const current = findVisionModel(ctx.modelRegistry, visionModelQuery);
+        const resolved = current ? ` (resolved: ${current.provider}/${current.id})` : " (not found in registry)";
         ctx.ui.notify(
-          `Current vision model: ${visionModel.provider}/${visionModel.id}. Usage: /image-describe-model provider/model-id`,
+          `Current query: "${visionModelQuery}"${resolved}. Usage: /image-describe-model <query>`,
           "info",
         );
         return;
       }
 
-      const slashIdx = input.indexOf("/");
-      if (slashIdx === -1) {
-        ctx.ui.notify("image-describe: expected format provider/model-id (e.g. minimax/minimax-m3)", "warning");
+      // Validate: at least one vision-capable model must match
+      const found = findVisionModel(ctx.modelRegistry, input);
+      if (!found) {
+        ctx.ui.notify(`image-describe: no vision model matching "${input}" found in registry`, "warning");
         return;
       }
 
-      const provider = input.slice(0, slashIdx);
-      const id = input.slice(slashIdx + 1);
-
-      // Validate: model must exist in registry
-      const model = ctx.modelRegistry.find(provider, id);
-      if (!model) {
-        ctx.ui.notify(`image-describe: model ${provider}/${id} not found in registry`, "warning");
-        return;
-      }
-
-      // Validate: model must support images
-      if (!model.input.includes("image")) {
-        ctx.ui.notify(`image-describe: ${provider}/${id} does not support image input`, "warning");
-        return;
-      }
-
-      visionModel = { provider, id };
-      ctx.ui.notify(`image-describe: vision model set to ${provider}/${id}`, "info");
+      visionModelQuery = input;
+      ctx.ui.notify(`image-describe: vision model query set to "${input}" (resolved: ${found.provider}/${found.id})`, "info");
     },
   });
 }
