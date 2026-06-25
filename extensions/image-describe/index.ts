@@ -109,8 +109,8 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Show toast
-    const label = imageRefs.length === 1 ? "1 imagen" : `${imageRefs.length} imágenes`;
-    ctx.ui.notify(`Describiendo ${label} con ${visionModel.provider}/${visionModel.id}...`, "info");
+    const label = imageRefs.length === 1 ? "1 image" : `${imageRefs.length} images`;
+    ctx.ui.notify(`Describing ${label} with ${visionModel.provider}/${visionModel.id}...`, "info");
 
     // Deep-clone messages so we can mutate safely
     const messages = JSON.parse(JSON.stringify(event.messages));
@@ -133,7 +133,11 @@ export default function (pi: ExtensionAPI) {
           descriptionCache.set(fp, description);
         } catch (err) {
           ctx.ui.notify(`image-describe: failed to describe image — ${(err as Error).message}`, "error");
-          // Leave block as-is by skipping replacement
+          // Replace with a text fallback so the non-vision model doesn't receive a raw image block
+          (messages[ref.msgIndex] as any).content[ref.blockIndex] = {
+            type: "text",
+            text: `[Image: could not be described — ${(err as Error).message}]`,
+          };
           continue;
         }
       }
