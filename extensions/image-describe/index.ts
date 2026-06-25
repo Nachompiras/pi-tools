@@ -147,4 +147,43 @@ export default function (pi: ExtensionAPI) {
 
     return { messages };
   });
+
+  pi.registerCommand("image-describe-model", {
+    description: "Set the vision model used to describe images. Usage: /image-describe-model provider/model-id",
+    handler: async (args, ctx) => {
+      const input = args?.trim();
+      if (!input) {
+        ctx.ui.notify(
+          `Current vision model: ${visionModel.provider}/${visionModel.id}. Usage: /image-describe-model provider/model-id`,
+          "info",
+        );
+        return;
+      }
+
+      const slashIdx = input.indexOf("/");
+      if (slashIdx === -1) {
+        ctx.ui.notify("image-describe: expected format provider/model-id (e.g. minimax/minimax-m3)", "warning");
+        return;
+      }
+
+      const provider = input.slice(0, slashIdx);
+      const id = input.slice(slashIdx + 1);
+
+      // Validate: model must exist in registry
+      const model = ctx.modelRegistry.find(provider, id);
+      if (!model) {
+        ctx.ui.notify(`image-describe: model ${provider}/${id} not found in registry`, "warning");
+        return;
+      }
+
+      // Validate: model must support images
+      if (!model.input.includes("image")) {
+        ctx.ui.notify(`image-describe: ${provider}/${id} does not support image input`, "warning");
+        return;
+      }
+
+      visionModel = { provider, id };
+      ctx.ui.notify(`image-describe: vision model set to ${provider}/${id}`, "info");
+    },
+  });
 }
