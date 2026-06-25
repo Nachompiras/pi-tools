@@ -194,10 +194,20 @@ async function describeImage(
 const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
 
 export default function (pi: ExtensionAPI) {
-  // Reload config and clear cache on every session start
-  pi.on("session_start", () => {
+  // On every session start: reload config and restore cache from persisted session entries.
+  // This covers startup, reload (git package auto-update), resume, fork — any reason.
+  // Without this, reloads or resumes would clear the cache and re-describe historical images.
+  pi.on("session_start", (_event, ctx) => {
     config = loadConfig();
     descriptionCache.clear();
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type === "custom" && entry.customType === "image-describe-cache") {
+        const data = entry.data as { fp?: string; description?: string } | undefined;
+        if (data?.fp && data?.description) {
+          descriptionCache.set(data.fp, data.description);
+        }
+      }
+    }
   });
 
   // Intercept messages before they reach the LLM
@@ -288,6 +298,8 @@ export default function (pi: ExtensionAPI) {
             ctx.signal,
           );
           descriptionCache.set(ref.fp, description);
+          // Persist so the cache survives reloads, resumes, and forks
+          pi.appendEntry("image-describe-cache", { fp: ref.fp, description });
         } catch (err) {
           ctx.ui.notify(`image-describe: failed to describe image — ${(err as Error).message}`, "error");
           // Replace with a text fallback so the non-vision model doesn't receive a raw image block
