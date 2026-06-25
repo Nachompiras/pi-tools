@@ -124,11 +124,11 @@ export default function (pi: ExtensionAPI) {
       return undefined;
     }
 
-    // Resolve API key
+    // Resolve auth (API key or headers — OpenRouter delivers auth via headers, not apiKey)
     const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (!auth.ok || !auth.apiKey) {
+    if (!auth.ok) {
       ctx.ui.notify(
-        `image-describe: no API key for ${model.provider}/${model.id} — images will be dropped`,
+        `image-describe: auth failed for ${model.provider}/${model.id} — ${auth.error}`,
         "error",
       );
       return undefined;
@@ -152,7 +152,7 @@ export default function (pi: ExtensionAPI) {
             ref.data,
             ref.mimeType,
             model,
-            auth.apiKey,
+            auth.apiKey ?? "",
             auth.headers,
             ctx.signal,
           );
