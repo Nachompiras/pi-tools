@@ -15,7 +15,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { complete, type UserMessage } from "@earendil-works/pi-ai/compat";
+import { complete, type UserMessage } from "@earendil-works/pi-ai";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // ---------------------------------------------------------------------------
