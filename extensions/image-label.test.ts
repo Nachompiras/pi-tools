@@ -24,7 +24,8 @@ const idxCases: Array<[string, number]> = [
   ["no labels here", 1],
   ["[Image 1]\n[Image 2]\n[Image 3]", 4],
   ["[image 1] [Image 2]", 3],       // case-sensitive: lowercase image is not counted
-  ["[Image 0]", 1],                 // zero is not a valid index
+  ["[image 1] [image 2]", 1],       // discriminating: lowercase-only returns 1 (not counted)
+  ["[Image 0]", 1],                 // [Image 0] matched but value 0, so next is 1
   ["[Image 1] [Image 1]", 2],       // duplicate: max is 1, so next is 2
 ];
 

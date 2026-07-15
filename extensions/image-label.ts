@@ -20,7 +20,7 @@ function getMimeType(p: string): string {
 
 const IMAGE_PATH_RE = /(\/[^\n]+\.(?:png|jpg|jpeg|gif|webp|bmp|tiff?))/gi;
 /** Matches valid [Image N] labels where N is a positive integer. */
-const IMAGE_LABEL_RE = /\[Image (\d+)\]/gi;
+const IMAGE_LABEL_RE = /\[Image (\d+)\]/g;
 
 /** Returns one greater than the highest [Image N] label in the editor text,
  *  or 1 when no such label exists. */
