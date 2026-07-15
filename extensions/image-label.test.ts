@@ -9,6 +9,7 @@ import {
   applyImageLabels,
   transformImagesOnSubmit,
   type LoadedImage,
+  type ImageDataSource,
 } from "./image-label.js";
 
 // ── nextImageLabelIndex ────────────────────────────────────────────────
@@ -29,19 +30,30 @@ const idxCases: Array<[string, number]> = [
 
 // ── applyImageLabels ──────────────────────────────────────────────────
 
-/** Fake filesystem: maps resolved paths to base64 image data + mime types. */
-const fakeFiles = new Map<string, { data: string; mimeType: string }>([
+/** Test data: maps resolved paths to base64 image data + mime types. */
+const testImageData = new Map<string, { data: string; mimeType: string }>([
   ["/images/photo.png", { data: "YWJj", mimeType: "image/png" }],     // "abc"
   ["/images/diagram.jpg", { data: "ZGVm", mimeType: "image/jpeg" }],   // "def"
   ["/images/chart.webp", { data: "Z2hp", mimeType: "image/webp" }],   // "ghi"
 ]);
+
+/** Test double implementing ImageDataSource — production-neutral contract. */
+const testDataSource: ImageDataSource = {
+  readFile: (path: string) => {
+    const entry = testImageData.get(path);
+    return entry ? Buffer.from(entry.data, "base64") : null;
+  },
+  getMimeType: (path: string) => {
+    return testImageData.get(path)?.mimeType ?? "image/png";
+  },
+};
 
 /** Simulates the label-application logic used inside the terminal handler. */
 function fakeApply(
   editorText: string,
   cleanedInput: string,
 ): { text: string; images: LoadedImage[] } {
-  return applyImageLabels(cleanedInput, fakeFiles, editorText);
+  return applyImageLabels(cleanedInput, testDataSource, editorText);
 }
 
 // ── transformImagesOnSubmit ────────────────────────────────────────────
@@ -140,9 +152,10 @@ async function main() {
   const secondTransformed = secondSubmit([piAttachment]);
 
   assert(secondTransformed.action === "continue", "second submit: action is continue (no pending)");
-  assert(!("images" in secondTransformed) || secondTransformed.images?.length === 1,
-    "second submit: no extra images (pending already consumed)",
-    "images" in secondTransformed ? `${secondTransformed.images?.length}` : "absent (correct)");
+  // MUST NOT include images property when action is 'continue' — vacuous alternate success branch
+  assert(!("images" in secondTransformed),
+    "second submit: action=continue must NOT include images property",
+    "images" in secondTransformed ? `found images (${secondTransformed.images?.length})` : "absent (correct)");
   assert(pending.length === 0, "pendingImages cleared after first submit", `${pending.length}`);
 
   // ── Summary ─────────────────────────────────────────────────────────

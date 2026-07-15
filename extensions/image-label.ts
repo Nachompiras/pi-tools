@@ -40,57 +40,50 @@ export interface LoadedImage {
 	mimeType: string;
 }
 
-/** File-system interface used by applyImageLabels (allows test doubles). */
-export interface FileReader {
-	readFileSync(path: string): Buffer;
+/** Production-neutral interface for loading image data.
+ *
+ * Implementations provide read access to file bytes and MIME type.
+ * Production: Node.js fs-based implementation.
+ * Testing: plain object implementing the interface. */
+export interface ImageDataSource {
+	readFile(path: string): Buffer | null;
+	getMimeType(path: string): string;
 }
 
-/** Real Node.js filesystem reader — used by the live extension. */
-const realFs: FileReader = {
-	readFileSync: (path: string) => fs.readFileSync(path),
+/** Real Node.js filesystem data source — used by the live extension. */
+const realFsDataSource: ImageDataSource = {
+	readFile: (path: string) => {
+		try { return fs.readFileSync(path); } catch { return null; }
+	},
+	getMimeType: (path: string) => getMimeType(path),
 };
 
 /** Applies [Image N] labels to cleaned terminal input, reads each image file,
  *  and returns the updated editor text plus the loaded image objects.
  *
- *  The startIndex parameter (from `nextImageLabelIndex`) ensures labels continue
- *  the visible sequence across sequential drops. */
+ *  The label index is derived from `editorText` internally using
+ *  `nextImageLabelIndex`, ensuring labels continue the visible sequence
+ *  across sequential drops. */
 export function applyImageLabels(
 	cleanedInput: string,
-	files: FileReader | Map<string, { data: string; mimeType: string }>,
+	dataSource: ImageDataSource,
 	editorText: string,
-	startIndex?: number,
 ): { text: string; images: LoadedImage[] } {
-	// Support both real FileReader and test double (Map of fake files)
-	const readFile = (path: string): Buffer | null => {
-		if ("readFileSync" in files) {
-			try { return files.readFileSync(path); } catch { return null; }
-		}
-		// Test-double path: Map<string, {data, mimeType}>
-		const fake = (files as Map<string, { data: string; mimeType: string }>).get(path);
-		return fake ? Buffer.from(fake.data, "base64") : null;
-	};
-
-	const getMime = (path: string): string => {
-		if ("readFileSync" in files) return getMimeType(path);
-		return (files as Map<string, { data: string; mimeType: string }>).get(path)?.mimeType ?? "image/png";
-	};
-
 	IMAGE_PATH_RE.lastIndex = 0;
 	const rawMatches = [...cleanedInput.matchAll(IMAGE_PATH_RE)].map(m => m[1]);
 	if (rawMatches.length === 0) return { text: cleanedInput, images: [] };
 
 	const images: LoadedImage[] = [];
 	let cleanedText = cleanedInput;
-	const start = startIndex ?? nextImageLabelIndex(editorText);
+	const start = nextImageLabelIndex(editorText);
 	let index = start;
 
 	for (const raw of rawMatches) {
 		const realPath = raw.replace(/\\(.)/g, "$1").trim();
-		const buf = readFile(realPath);
+		const buf = dataSource.readFile(realPath);
 		if (!buf) continue;  // Can't read — leave path as-is, no label consumed
 
-		images.push({ type: "image", data: buf.toString("base64"), mimeType: getMime(realPath) });
+		images.push({ type: "image", data: buf.toString("base64"), mimeType: dataSource.getMimeType(realPath) });
 		const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		cleanedText = cleanedText.replace(new RegExp(escaped, "g"), `[Image ${index}]`);
 		index++;
@@ -151,7 +144,7 @@ export default function (pi: ExtensionAPI) {
 			const currentText = ctx.ui.getEditorText();
 			const { text: relabeled, images } = applyImageLabels(
 				cleaned,
-				realFs,
+				realFsDataSource,
 				currentText,
 			);
 			if (images.length === 0) return undefined;
