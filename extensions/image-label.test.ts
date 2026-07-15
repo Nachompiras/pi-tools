@@ -159,6 +159,64 @@ async function main() {
     "images" in secondTransformed ? `found images (${secondTransformed.images?.length})` : "absent (correct)");
   assert(pending.length === 0, "pendingImages cleared after first submit", `${pending.length}`);
 
+  // ── Mixed readable/unreadable paths ─────────────────────────────────
+  console.log("\nMixed readable/unreadable paths:");
+
+  // Test datasource with both readable and unreadable paths
+  const mixedDataSource: ImageDataSource = {
+    readFile: (path: string) => {
+      const entry = testImageData.get(path);
+      return entry ? Buffer.from(entry.data, "base64") : null;
+    },
+    getMimeType: (path: string) => testImageData.get(path)?.mimeType ?? "image/png",
+  };
+
+  // Simulate: readable, then unreadable, then readable
+  const mixedInput = "/images/photo.png\n/nonexistent/broken.png\n/images/diagram.jpg";
+
+  // Editor starts empty, so first readable gets [Image 1]
+  const mixedResult = applyImageLabels(mixedInput, mixedDataSource, "");
+
+  assert(
+    mixedResult.text.includes("[Image 1]"),
+    "readable photo.png gets [Image 1]",
+    mixedResult.text,
+  );
+  assert(
+    mixedResult.text.includes("nonexistent/broken.png"),
+    "unreadable path stays verbatim in text",
+    mixedResult.text,
+  );
+  assert(
+    mixedResult.text.includes("[Image 2]"),
+    "second readable diagram.jpg gets [Image 2]",
+    mixedResult.text,
+  );
+  assert(
+    mixedResult.images.length === 2,
+    "only 2 images attached (unreadable skipped)",
+    `${mixedResult.images.length}`,
+  );
+  assert(
+    mixedResult.images[0].mimeType === "image/png",
+    "first image is photo.png",
+    mixedResult.images[0].mimeType,
+  );
+  assert(
+    mixedResult.images[1].mimeType === "image/jpeg",
+    "second image is diagram.jpg",
+    mixedResult.images[1].mimeType,
+  );
+
+  // Verify label counter does NOT include unreadable path
+  // After drop with 2 labels, next drop starts at [Image 3]
+  const followUp = applyImageLabels("/images/chart.webp", mixedDataSource, mixedResult.text);
+  assert(
+    followUp.text === "[Image 3]",
+    "follow-up drop gets [Image 3] (no gap from unreadable)",
+    followUp.text,
+  );
+
   // ── Summary ─────────────────────────────────────────────────────────
   console.log(`\n${"═".repeat(50)}`);
   console.log(`✅ ${passed} passed   ❌ ${failed} failed`);

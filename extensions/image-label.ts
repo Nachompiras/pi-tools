@@ -95,11 +95,9 @@ export function applyImageLabels(
 }
 
 /** Result shape returned by the terminal-input and input handlers. */
-export interface TransformResult {
-	action: "transform" | "continue";
-	text?: string;
-	images?: LoadedImage[];
-}
+export type TransformResult =
+	| { action: "transform"; text: string; images: LoadedImage[] }
+	| { action: "continue" };
 
 /** Transforms the `input` event by appending all accumulated pending images to
  *  the Pi-supplied event.images, then clears pending.
