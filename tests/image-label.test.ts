@@ -2,7 +2,7 @@
  * image-label regression tests — verifies accumulated [Image N] labels
  * and one-time attachment forwarding across sequential drops.
  *
- * Run with: npx tsx extensions/image-label.test.ts
+ * Run with: npx tsx tests/image-label.test.ts
  */
 import {
   nextImageLabelIndex,
@@ -10,7 +10,7 @@ import {
   transformImagesOnSubmit,
   type LoadedImage,
   type ImageDataSource,
-} from "./image-label.js";
+} from "../extensions/image-label.js";
 
 // ── nextImageLabelIndex ────────────────────────────────────────────────
 
