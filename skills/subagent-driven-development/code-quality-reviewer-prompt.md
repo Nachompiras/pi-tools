@@ -1,30 +1,31 @@
-# Code Quality Reviewer Prompt Template
+# Code Quality Reviewer Task Brief
 
-Use this template when dispatching a code quality reviewer subagent.
+Use this as the complete `task` value for a fresh `reviewer` child launched through `runs.run(...)` only after spec compliance passes.
 
-**Purpose:** Verify implementation is well-built (clean, tested, maintainable)
+Base the review on `skills/requesting-code-review/code-reviewer.md` and include:
 
-**Only dispatch after spec compliance review passes.**
+- what was implemented;
+- the approved task and plan path;
+- exact base and head commits;
+- focused and full verification evidence;
+- the implementer's changed-file list.
 
-## Dispatch Example
+Inspect the actual diff and surrounding code. Check correctness, error handling, security/privacy boundaries, meaningful tests, maintainability, unnecessary complexity, and relevant performance risks.
 
-```
-Agent({ subagent_type: "reviewer", prompt: "...", description: "Code quality review for Task N" })
-```
+Also check that:
 
-Agent({ subagent_type: "reviewer", ... }):
-  Use template at requesting-code-review/code-reviewer.md
+- each changed file has one clear responsibility;
+- units can be understood and tested independently;
+- the implementation follows the plan's file structure;
+- new code did not make files needlessly large or tangled;
+- findings distinguish newly introduced problems from pre-existing issues.
 
-  WHAT_WAS_IMPLEMENTED: [from implementer's report]
-  PLAN_OR_REQUIREMENTS: Task N from [plan-file]
-  BASE_SHA: [commit before task]
-  HEAD_SHA: [current commit]
-  DESCRIPTION: [task summary]
+## Report Format
 
-**In addition to standard code quality concerns, the reviewer should check:**
-- Does each file have one clear responsibility with a well-defined interface?
-- Are units decomposed so they can be understood and tested independently?
-- Is the implementation following the file structure from the plan?
-- Did this implementation create new files that are already large, or significantly grow existing files? (Don't flag pre-existing file sizes — focus on what this change contributed.)
+Return:
 
-**Code reviewer returns:** Strengths, Issues (Critical/Important/Minor), Assessment
+1. **Strengths**
+2. **Issues** grouped as Critical, Important, or Minor, each with `file:line` evidence and a concrete correction
+3. **Assessment:** `APPROVED` or `CHANGES_REQUIRED`
+
+Do not approve when Critical or Important issues remain. Do not block on unsupported preferences.
