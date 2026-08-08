@@ -10,8 +10,10 @@
  *  3. Stage-3 chairman produces non-empty synthesis
  */
 
+import { complete, getModel } from "@earendil-works/pi-ai/compat";
 import { runCouncil, type CouncilResult, type ProgressEvent } from "./council.js";
 import type { CouncilConfig } from "./config.js";
+import type { CouncilModelGateway } from "./openrouter.js";
 
 // ── Config ───────────────────────────────────────────────────────────
 const MODELS = [
@@ -53,11 +55,24 @@ if (!apiKey) {
 	process.exit(1);
 }
 
-const getApiKeyAndHeaders = async (_model: object) => ({
-	ok: true as const,
-	apiKey: apiKey!,
-	headers: undefined,
-});
+const lookupModel = getModel as unknown as (
+	provider: string,
+	modelId: string,
+) => ReturnType<CouncilModelGateway["resolve"]>;
+
+const modelGateway: CouncilModelGateway = {
+	resolve(modelId) {
+		const [provider, ...idParts] = modelId.split("/");
+		return lookupModel(provider, idParts.join("/"));
+	},
+	complete(model, context, signal) {
+		return complete(model, context, {
+			apiKey: apiKey!,
+			signal,
+			...(model.reasoning ? { reasoningEffort: "medium" } : {}),
+		});
+	},
+};
 
 function icon(ok: boolean) {
 	return ok ? "✓" : "✗";
@@ -112,7 +127,7 @@ async function main() {
 		result = await runCouncil(SPEC, "spec", "", config, {
 			onStageStart,
 			onProgress,
-			getApiKeyAndHeaders,
+			modelGateway,
 		});
 	} catch (err) {
 		console.error(`\n💥 Council threw: ${err}`);

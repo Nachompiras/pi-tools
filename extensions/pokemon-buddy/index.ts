@@ -18,7 +18,7 @@
  *   /pokemon list        — show suggestions
  */
 
-import type { ExtensionAPI, BeforeAgentStartEvent } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, BeforeAgentStartEvent } from "@earendil-works/pi-coding-agent";
 import { spawn, type ChildProcess, execSync } from "node:child_process";
 import { existsSync, statSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { writeFile } from "node:fs/promises";

@@ -1,5 +1,5 @@
 import type { ReviewType, CouncilConfig } from "./config.js";
-import { queryModelsParallel, type GetApiKeyAndHeaders, type ProgressEvent } from "./openrouter.js";
+import { queryModelsParallel, type CouncilModelGateway, type ProgressEvent } from "./openrouter.js";
 import { buildStage1Prompt, buildStage2Prompt, buildStage3Prompt } from "./prompts.js";
 
 export type { ProgressEvent } from "./openrouter.js";
@@ -85,7 +85,7 @@ function computeAggregateRankings(
 export interface RunCouncilHooks {
 	onStageStart: (stage: 1 | 2 | 3, models: string[]) => void;
 	onProgress?: (stage: 1 | 2 | 3, event: ProgressEvent) => void;
-	getApiKeyAndHeaders: GetApiKeyAndHeaders;
+	modelGateway: CouncilModelGateway;
 	signal?: AbortSignal;
 }
 
@@ -96,7 +96,7 @@ export async function runCouncil(
 	config: CouncilConfig,
 	hooks: RunCouncilHooks,
 ): Promise<CouncilResult> {
-	const { onStageStart, onProgress, getApiKeyAndHeaders, signal } = hooks;
+	const { onStageStart, onProgress, modelGateway, signal } = hooks;
 
 	// Stage 1
 	onStageStart(1, config.models);
@@ -105,7 +105,7 @@ export async function runCouncil(
 		config.models,
 		stage1Prompt,
 		config.timeout,
-		getApiKeyAndHeaders,
+		modelGateway,
 		(e) => onProgress?.(1, e),
 		signal,
 	);
@@ -146,7 +146,7 @@ export async function runCouncil(
 		stage2Models,
 		stage2Prompt,
 		config.timeout,
-		getApiKeyAndHeaders,
+		modelGateway,
 		(e) => onProgress?.(2, e),
 		signal,
 	);
@@ -178,7 +178,7 @@ export async function runCouncil(
 		[config.chairman],
 		stage3Prompt,
 		config.timeout,
-		getApiKeyAndHeaders,
+		modelGateway,
 		(e) => onProgress?.(3, e),
 		signal,
 	);

@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { BorderedLoader, ModelSelectorComponent, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { BorderedLoader, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadConfig, saveConfig, CONFIG_PATH, type ReviewType, type CouncilConfig } from "./config.js";
 import { runCouncil, type CouncilResult, type ProgressEvent } from "./council.js";
+import type { CouncilModelGateway } from "./openrouter.js";
 
 type ModelState = "pending" | "running" | "done" | "failed";
 
@@ -137,34 +138,23 @@ function formatFullResult(result: CouncilResult): string {
 	return lines.join("\n");
 }
 
-// Stub so ModelSelectorComponent doesn't save as pi's default model
-const settingsManagerStub = { setDefaultModelAndProvider: () => {} };
-
-// Pick a single model using pi's built-in model selector UI
+// Pick a single model without mutating Pi's default model.
 async function pickModel(
 	ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1],
 	title: string,
 	currentModelId?: string,
 ): Promise<string | undefined> {
-	const currentModel = currentModelId
-		? ctx.modelRegistry.find(
-				currentModelId.split("/")[0],
-				currentModelId.split("/").slice(1).join("/"),
-		  )
-		: undefined;
+	const modelIds = ctx.modelRegistry
+		.getAvailable()
+		.map((model) => `${model.provider}/${model.id}`)
+		.sort((a, b) => a.localeCompare(b));
 
-	return ctx.ui.custom<string | undefined>((tui, theme, kb, done) => {
-		const selector = new ModelSelectorComponent(
-			tui,
-			currentModel,
-			settingsManagerStub as any,
-			ctx.modelRegistry,
-			[],
-			(model) => done(`${model.provider}/${model.id}`),
-			() => done(undefined),
-		);
-		return selector;
-	});
+	if (currentModelId && modelIds.includes(currentModelId)) {
+		modelIds.splice(modelIds.indexOf(currentModelId), 1);
+		modelIds.unshift(currentModelId);
+	}
+
+	return ctx.ui.select(title, modelIds);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -332,6 +322,19 @@ export default function (pi: ExtensionAPI) {
 
 			type RunOutcome = { ok: true; result: CouncilResult } | { ok: false; cancelled: true } | { ok: false; error: string };
 
+			const modelGateway: CouncilModelGateway = {
+				resolve(modelId) {
+					const [provider, ...idParts] = modelId.split("/");
+					return ctx.modelRegistry.find(provider, idParts.join("/"));
+				},
+				complete(model, context, signal) {
+					return ctx.modelRegistry.complete(model, context, {
+						signal,
+						...(model.reasoning ? { reasoningEffort: "medium" } : {}),
+					} as any);
+				},
+			};
+
 			const outcome = await ctx.ui.custom<RunOutcome>((tui, theme, _kb, done) => {
 				const loader = new BorderedLoader(tui, theme, `🏛️ Council starting — ${STAGE_LABELS[1]}...`);
 				loader.onAbort = () => done({ ok: false, cancelled: true });
@@ -339,7 +342,7 @@ export default function (pi: ExtensionAPI) {
 				runCouncil(content, reviewType, extraInstructions, config, {
 					onStageStart: handleStageStart,
 					onProgress: handleProgress,
-					getApiKeyAndHeaders: (model) => ctx.modelRegistry.getApiKeyAndHeaders(model),
+					modelGateway,
 					signal: loader.signal,
 				})
 					.then((result) => done({ ok: true, result }))

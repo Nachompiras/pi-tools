@@ -1,4 +1,4 @@
-import { complete, getModel } from "@mariozechner/pi-ai";
+import type { Api, AssistantMessage, Context, Model } from "@earendil-works/pi-ai";
 
 export interface ModelResponse {
 	model: string;
@@ -11,15 +11,10 @@ export type ProgressEvent =
 	| { type: "start"; model: string }
 	| { type: "done"; model: string; ok: boolean; error?: string };
 
-type RegistryModel = NonNullable<ReturnType<typeof getModel>>;
-const lookupModel = getModel as unknown as (
-	provider: string,
-	modelId: string,
-) => RegistryModel | undefined;
-
-export type GetApiKeyAndHeaders = (
-	model: RegistryModel,
-) => Promise<{ ok: boolean; apiKey?: string; headers?: Record<string, string>; error?: string }>;
+export interface CouncilModelGateway {
+	resolve(modelId: string): Model<Api> | undefined;
+	complete(model: Model<Api>, context: Context, signal: AbortSignal): Promise<AssistantMessage>;
+}
 
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 2000;
@@ -56,20 +51,13 @@ async function queryModelOnce(
 	modelId: string,
 	prompt: string,
 	timeoutSecs: number,
-	getApiKeyAndHeaders: GetApiKeyAndHeaders,
+	modelGateway: CouncilModelGateway,
 	signal?: AbortSignal,
 ): Promise<ModelResponse> {
-	const [provider, ...rest] = modelId.split("/");
-	const id = rest.join("/");
-
-	const model = lookupModel(provider, id);
+	const model = modelGateway.resolve(modelId);
 	if (!model) {
 		return { model: modelId, content: "", cost: 0, error: `Model not found in pi registry: ${modelId}` };
 	}
-
-	const auth = await getApiKeyAndHeaders(model);
-	if (!auth.ok) return { model: modelId, content: "", cost: 0, error: auth.error ?? "Auth failed" };
-	if (!auth.apiKey) return { model: modelId, content: "", cost: 0, error: `No API key configured for ${provider}` };
 
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(new Error(`Timed out after ${timeoutSecs}s`)), timeoutSecs * 1000);
@@ -77,21 +65,14 @@ async function queryModelOnce(
 	signal?.addEventListener("abort", onParentAbort, { once: true });
 
 	try {
-		const response = await complete(
+		const response = await modelGateway.complete(
 			model,
 			{
 				messages: [
 					{ role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
 				],
 			},
-			{
-				apiKey: auth.apiKey,
-				headers: auth.headers,
-				signal: controller.signal,
-				// Models like grok-4 / gemini-3.1-pro require reasoning to be enabled.
-				// complete() uses the raw provider stream, which reads `reasoningEffort`.
-				...(model.reasoning ? { reasoningEffort: "medium" } : {}),
-			},
+			controller.signal,
 		);
 
 		const content = response.content
@@ -117,7 +98,7 @@ export async function queryModel(
 	modelId: string,
 	prompt: string,
 	timeoutSecs: number,
-	getApiKeyAndHeaders: GetApiKeyAndHeaders,
+	modelGateway: CouncilModelGateway,
 	signal?: AbortSignal,
 ): Promise<ModelResponse> {
 	let lastResult: ModelResponse | undefined;
@@ -127,7 +108,7 @@ export async function queryModel(
 			return lastResult ?? { model: modelId, content: "", cost: 0, error: "Aborted" };
 		}
 
-		const result = await queryModelOnce(modelId, prompt, timeoutSecs, getApiKeyAndHeaders, signal);
+		const result = await queryModelOnce(modelId, prompt, timeoutSecs, modelGateway, signal);
 
 		// Success
 		if (!result.error) return result;
@@ -151,7 +132,7 @@ export async function queryModelsParallel(
 	models: string[],
 	prompt: string,
 	timeoutSecs: number,
-	getApiKeyAndHeaders: GetApiKeyAndHeaders,
+	modelGateway: CouncilModelGateway,
 	onProgress?: (event: ProgressEvent) => void,
 	signal?: AbortSignal,
 ): Promise<ModelResponse[]> {
@@ -162,7 +143,7 @@ export async function queryModelsParallel(
 				await sleep(STAGGER_DELAY_MS * index, signal);
 			}
 			onProgress?.({ type: "start", model: m });
-			const r = await queryModel(m, prompt, timeoutSecs, getApiKeyAndHeaders, signal);
+			const r = await queryModel(m, prompt, timeoutSecs, modelGateway, signal);
 			const hasContent = r.content.trim().length > 0;
 			if (!hasContent && !r.error) {
 				r.error = "Empty response";

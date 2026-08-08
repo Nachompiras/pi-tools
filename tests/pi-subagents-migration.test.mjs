@@ -96,6 +96,26 @@ test("historical Tintinweb migration notes are clearly superseded", () => {
   assert.match(historicalTodo, /Superseded by .*2026-08-07-pi-subagents-and-vision-migration-design\.md/);
 });
 
+test("active Pi imports and peers use only the Earendil namespace", () => {
+  const manifest = readJson("package.json");
+  const piFiles = [
+    "package.json",
+    "package-lock.json",
+    ...filesUnder("extensions", ".ts"),
+  ];
+  for (const path of piFiles) {
+    assert.doesNotMatch(read(path), /@mariozechner\/pi-/, `${path} contains the obsolete Pi namespace`);
+  }
+
+  const requiredPeers = [
+    "@earendil-works/pi-agent-core",
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+  ];
+  for (const peer of requiredPeers) assert.equal(manifest.peerDependencies?.[peer], "*", peer);
+});
+
 test("Discord is removed and TypeScript dependencies are explicit", () => {
   const manifest = readJson("package.json");
   assert.equal(existsSync(join(root, "extensions/discord")), false);
