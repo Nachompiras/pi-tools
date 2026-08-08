@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCouncilModelGateway } from "../extensions/council/model-gateway.js";
-import { filterModelIds } from "../extensions/council/model-picker.js";
+import { filterModelIds, findModelRemovalIndex } from "../extensions/council/model-picker.js";
 
 test("filterModelIds matches case-insensitively and caps large catalogues", () => {
   const modelIds = Array.from({ length: 80 }, (_, index) => `openrouter/vendor/model-${index}`);
@@ -9,7 +9,14 @@ test("filterModelIds matches case-insensitively and caps large catalogues", () =
 
   assert.deepEqual(filterModelIds(modelIds, "anthropic"), ["openrouter/Anthropic/Claude-Sonnet"]);
   assert.equal(filterModelIds(modelIds, "model-").length, 50);
+  assert.equal(filterModelIds(modelIds, "model-", 5).length, 5);
   assert.deepEqual(filterModelIds(modelIds, "   "), []);
+});
+
+test("findModelRemovalIndex uses an exact model id", () => {
+  const models = ["vendor/foo", "vendor/foo-extended"];
+  assert.equal(findModelRemovalIndex(models, "❌ Remove: vendor/foo-extended"), 1);
+  assert.equal(findModelRemovalIndex(models, "❌ Remove: vendor/foo-extra"), -1);
 });
 
 test("Council gateway resolves nested model ids through ModelRegistry", () => {

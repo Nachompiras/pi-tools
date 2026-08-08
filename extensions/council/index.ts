@@ -4,7 +4,7 @@ import { BorderedLoader, type ExtensionAPI } from "@earendil-works/pi-coding-age
 import { loadConfig, saveConfig, CONFIG_PATH, type ReviewType, type CouncilConfig } from "./config.js";
 import { runCouncil, type CouncilResult, type ProgressEvent } from "./council.js";
 import { createCouncilModelGateway } from "./model-gateway.js";
-import { filterModelIds } from "./model-picker.js";
+import { filterModelIds, findModelRemovalIndex } from "./model-picker.js";
 
 type ModelState = "pending" | "running" | "done" | "failed";
 
@@ -150,7 +150,7 @@ async function pickModel(
 		currentModelId ?? "provider/model",
 	);
 	if (query === undefined) return undefined;
-	if (!query.trim() && currentModelId) return currentModelId;
+	if (!query.trim()) return currentModelId;
 
 	const modelIds = ctx.modelRegistry
 		.getAvailable()
@@ -206,8 +206,7 @@ export default function (pi: ExtensionAPI) {
 					if (picked && !models.includes(picked)) models.push(picked);
 					else if (picked) ctx.ui.notify("Model already in council.", "warning");
 				} else {
-					// Remove by matching the model string in the label
-					const removeIdx = models.findIndex((m) => action.includes(m));
+					const removeIdx = findModelRemovalIndex(models, action);
 					if (removeIdx !== -1) models.splice(removeIdx, 1);
 				}
 			}
