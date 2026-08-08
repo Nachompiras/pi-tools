@@ -22,41 +22,28 @@ pi update
 
 ## Dependencies
 
-This package requires [`@tintinweb/pi-subagents`](https://github.com/tintinweb/pi-subagents) for subagent-driven workflows:
+Install the pinned Pi packages used by the subagent and image workflows:
 
 ```bash
-pi install npm:@tintinweb/pi-subagents
+pi install npm:pi-subagents@0.43.0
+pi install npm:@getpipher/vision@0.5.2
 ```
 
-## Custom Agent Setup
+[`pi-subagents`](https://github.com/nicobailon/pi-subagents) provides the `subagent` and `subagent_wait` tools. [`@getpipher/vision`](https://github.com/getpipher/vision) owns image labeling, attachment routing, and descriptions for text-only models; this package does not duplicate that behavior.
 
-Several skills reference custom agent types (`worker`, `reviewer`, `planner`, `scout`). These are defined in the `agents/` directory and need to be copied to your global agents folder:
+## Custom Agents
 
-```bash
-cp agents/*.md ~/.pi/agent/agents/
-```
-
-This makes the agents available in all your projects. You can also copy them to a specific project:
-
-```bash
-mkdir -p .pi/agents
-cp agents/*.md .pi/agents/
-```
+The package exposes `agents/` through `pi.subagents.agents`, so Pi discovers these definitions automatically—no manual copy step is required.
 
 | Agent | Purpose | Model |
 |-------|---------|-------|
-| `worker` | General-purpose implementation with full tools | inherits parent |
-| `reviewer` | Code review, quality and security analysis (read-only) | sonnet |
-| `planner` | Implementation planning from context and requirements (read-only) | inherits parent |
-| `scout` | Fast codebase recon for handoff to other agents (read-only) | haiku |
+| `explore` | Fast codebase exploration (read-only) | minimax-m2.7 |
+| `worker` | General-purpose implementation with full tools | deepseek/deepseek-v4-pro |
+| `reviewer` | Code review, quality and security analysis (read-only) | claude-sonnet-4-6 |
+| `planner` | Implementation planning from context and requirements (read-only) | inherits configured default |
+| `scout` | Fast codebase recon for handoff to other agents (read-only) | minimax-m2.7 |
 
-These agents work alongside the built-in types from `@tintinweb/pi-subagents`:
-
-| Built-in | Purpose |
-|----------|---------|
-| `general-purpose` | Full capabilities, inherits parent's system prompt |
-| `Explore` | Fast codebase exploration (read-only, haiku) |
-| `Plan` | Software architect for planning (read-only) |
+These definitions override same-named builtins at package priority. The custom `planner` remains a planning specialist; Nicobailon's builtin `oracle` is instead an advisory second opinion for risky decisions.
 
 ## What's Included
 

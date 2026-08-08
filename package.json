@@ -17,10 +17,14 @@
     ],
     "prompts": [
       "./prompts"
-    ]
+    ],
+    "subagents": {
+      "agents": [
+        "./agents"
+      ]
+    }
   },
   "dependencies": {
-    "@tintinweb/pi-subagents": "^0.5.2",
     "discord.js": "^14.26.4"
   },
   "peerDependencies": {
