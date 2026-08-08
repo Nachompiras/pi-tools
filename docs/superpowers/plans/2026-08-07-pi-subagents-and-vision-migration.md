@@ -499,19 +499,19 @@ Expected: no commit is created when verification requires no tracked correction.
 - Test: `tests/pi-subagents-migration.test.mjs`
 - Do not modify: `extensions/token-speed/`, `tests/token-speed.test.ts`
 
-- [ ] **Step 1: Extend the namespace contract and verify RED**
+- [x] **Step 1: Extend the namespace contract and verify RED**
 
 Assert that active source, both manifests, and the lockfile contain no `@mariozechner/pi-` reference. Assert that the four imported `@earendil-works/pi-*` core packages are declared as `*` peers. Run the migration test and confirm it fails on the current Mario imports/peers.
 
-- [ ] **Step 2: Migrate imports and peer dependencies**
+- [x] **Step 2: Migrate imports and peer dependencies**
 
 Replace the seven active Mario import specifiers with their Earendil equivalents. Replace old peers with `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui`; retain TypeScript 5.9.3 and package resources unchanged. Regenerate the lockfile.
 
-- [ ] **Step 3: Resolve only API/type differences exposed by the current Pi packages**
+- [x] **Step 3: Resolve only API/type differences exposed by the current Pi packages**
 
 Run TypeScript and make the smallest behavior-preserving corrections required by Earendil 0.84.1. Do not alter the separately owned token-speed implementation.
 
-- [ ] **Step 4: Verify runtime, tests, and security**
+- [x] **Step 4: Verify runtime, tests, and security**
 
 Run:
 
@@ -527,7 +527,7 @@ pi --mode json -p '/subagents-doctor'
 
 Expected: tests and typecheck pass; Council's live E2E passes; production audit reports zero vulnerabilities; doctor discovers 6 builtin and 5 package agents with async and supervisor support.
 
-- [ ] **Step 5: Commit the namespace migration**
+- [x] **Step 5: Commit the namespace migration**
 
 ```bash
 git add package.json package-lock.json extensions/council extensions/plan-mode/index.ts extensions/pokemon-buddy/index.ts tests/pi-subagents-migration.test.mjs docs/superpowers
