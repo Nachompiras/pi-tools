@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, extname, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { basename, extname, join, resolve } from "node:path";
 import test from "node:test";
 
 const root = resolve(import.meta.dirname, "..");
@@ -63,23 +63,40 @@ test("active resources use only the Nicobailon orchestration API", () => {
     /subagent_type/,
     /isolation:\s*["']worktree["']/,
   ];
-  for (const pattern of forbidden) assert.doesNotMatch(activeResources, pattern);
+  for (const pattern of forbidden) {
+    for (const path of activeResourcePaths) {
+      assert.doesNotMatch(read(path), pattern, `${path} contains obsolete API ${pattern}`);
+    }
+  }
 
-  const nonVisualCompanion = activeResourcePaths
-    .filter((path) => path !== "skills/brainstorming/visual-companion.md")
-    .map(read)
-    .join("\n");
-  assert.doesNotMatch(nonVisualCompanion, /run_in_background/);
+  for (const path of activeResourcePaths) {
+    if (path === "skills/brainstorming/visual-companion.md") continue;
+    assert.doesNotMatch(read(path), /run_in_background/, `${path} contains obsolete background syntax`);
+  }
 });
 
 test("active workflows document the required v0.43 contracts", () => {
-  assert.match(activeResources, /workflowScript/);
-  assert.match(activeResources, /workflowScript[\s\S]{0,1000}\breturn\b/);
-  assert.match(activeResources, /runs\.run\s*\(/);
-  assert.match(activeResources, /runs\.all\s*\(/);
-  assert.match(activeResources, /subagent_wait\s*\(/);
-  assert.match(activeResources, /action:\s*["']steer["']/);
-  assert.match(activeResources, /worktree:\s*true/);
+  const required = [
+    /workflowScript/,
+    /workflowScript[\s\S]{0,1000}\breturn\b/,
+    /runs\.run\s*\(/,
+    /runs\.all\s*\(/,
+    /subagent_wait\s*\(/,
+    /action:\s*["']steer["']/,
+    /worktree:\s*true/,
+  ];
+  for (const pattern of required) {
+    assert.ok(pattern.test(activeResources), `active resources must document ${pattern}`);
+  }
+});
+
+test("Discord is removed and TypeScript dependencies are explicit", () => {
+  const manifest = readJson("package.json");
+  assert.equal(existsSync(join(root, "extensions/discord")), false);
+  assert.equal(manifest.dependencies?.["discord.js"], undefined);
+  assert.doesNotMatch(read("package-lock.json"), /node_modules\/discord\.js/);
+  assert.equal(manifest.devDependencies?.typescript, "5.9.3");
+  assert.equal(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"], "*");
 });
 
 test("local image extensions are replaced by pinned Vision", () => {

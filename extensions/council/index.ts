@@ -270,7 +270,7 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			// Check config first
 			const configResult = loadConfig();
-			if (!configResult.ok) {
+			if (configResult.ok === false) {
 				ctx.ui.notify(configResult.error, "warning");
 				return;
 			}
@@ -350,7 +350,7 @@ export default function (pi: ExtensionAPI) {
 
 			ctx.ui.setWidget(WIDGET_ID, undefined);
 
-			if (!outcome.ok) {
+			if (outcome.ok === false) {
 				if ("cancelled" in outcome) {
 					ctx.ui.notify("Council cancelled.", "info");
 				} else {

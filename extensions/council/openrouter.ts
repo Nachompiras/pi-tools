@@ -11,8 +11,14 @@ export type ProgressEvent =
 	| { type: "start"; model: string }
 	| { type: "done"; model: string; ok: boolean; error?: string };
 
+type RegistryModel = NonNullable<ReturnType<typeof getModel>>;
+const lookupModel = getModel as unknown as (
+	provider: string,
+	modelId: string,
+) => RegistryModel | undefined;
+
 export type GetApiKeyAndHeaders = (
-	model: object,
+	model: RegistryModel,
 ) => Promise<{ ok: boolean; apiKey?: string; headers?: Record<string, string>; error?: string }>;
 
 const MAX_RETRIES = 2;
@@ -56,7 +62,7 @@ async function queryModelOnce(
 	const [provider, ...rest] = modelId.split("/");
 	const id = rest.join("/");
 
-	const model = getModel(provider, id);
+	const model = lookupModel(provider, id);
 	if (!model) {
 		return { model: modelId, content: "", cost: 0, error: `Model not found in pi registry: ${modelId}` };
 	}

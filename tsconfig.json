@@ -11,5 +11,8 @@
     "strict": false
   },
   "include": ["extensions/**/*.ts", "agents/**/*.ts", "skills/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "skills/systematic-debugging/condition-based-waiting-example.ts"
+  ]
 }
