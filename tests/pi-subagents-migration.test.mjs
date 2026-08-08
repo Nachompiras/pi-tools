@@ -90,6 +90,12 @@ test("active workflows document the required v0.43 contracts", () => {
   }
 });
 
+test("historical Tintinweb migration notes are clearly superseded", () => {
+  const historicalTodo = read("tasks/todo.md");
+  assert.match(historicalTodo, /^# Historical:/);
+  assert.match(historicalTodo, /Superseded by .*2026-08-07-pi-subagents-and-vision-migration-design\.md/);
+});
+
 test("Discord is removed and TypeScript dependencies are explicit", () => {
   const manifest = readJson("package.json");
   assert.equal(existsSync(join(root, "extensions/discord")), false);
