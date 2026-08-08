@@ -3,7 +3,8 @@ import * as path from "node:path";
 import { BorderedLoader, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadConfig, saveConfig, CONFIG_PATH, type ReviewType, type CouncilConfig } from "./config.js";
 import { runCouncil, type CouncilResult, type ProgressEvent } from "./council.js";
-import type { CouncilModelGateway } from "./openrouter.js";
+import { createCouncilModelGateway } from "./model-gateway.js";
+import { filterModelIds } from "./model-picker.js";
 
 type ModelState = "pending" | "running" | "done" | "failed";
 
@@ -138,23 +139,31 @@ function formatFullResult(result: CouncilResult): string {
 	return lines.join("\n");
 }
 
-// Pick a single model without mutating Pi's default model.
+// Pick a model from a bounded search result without mutating Pi's default.
 async function pickModel(
 	ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1],
 	title: string,
 	currentModelId?: string,
 ): Promise<string | undefined> {
+	const query = await ctx.ui.input(
+		`${title} — search by provider or model`,
+		currentModelId ?? "provider/model",
+	);
+	if (query === undefined) return undefined;
+	if (!query.trim() && currentModelId) return currentModelId;
+
 	const modelIds = ctx.modelRegistry
 		.getAvailable()
 		.map((model) => `${model.provider}/${model.id}`)
 		.sort((a, b) => a.localeCompare(b));
+	const matches = filterModelIds(modelIds, query);
 
-	if (currentModelId && modelIds.includes(currentModelId)) {
-		modelIds.splice(modelIds.indexOf(currentModelId), 1);
-		modelIds.unshift(currentModelId);
+	if (matches.length === 0) {
+		ctx.ui.notify(`No available models match "${query.trim()}".`, "warning");
+		return undefined;
 	}
 
-	return ctx.ui.select(title, modelIds);
+	return ctx.ui.select(`${title} (${matches.length} matches, max 50)`, matches);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -322,18 +331,7 @@ export default function (pi: ExtensionAPI) {
 
 			type RunOutcome = { ok: true; result: CouncilResult } | { ok: false; cancelled: true } | { ok: false; error: string };
 
-			const modelGateway: CouncilModelGateway = {
-				resolve(modelId) {
-					const [provider, ...idParts] = modelId.split("/");
-					return ctx.modelRegistry.find(provider, idParts.join("/"));
-				},
-				complete(model, context, signal) {
-					return ctx.modelRegistry.complete(model, context, {
-						signal,
-						...(model.reasoning ? { reasoningEffort: "medium" } : {}),
-					} as any);
-				},
-			};
+			const modelGateway = createCouncilModelGateway(ctx.modelRegistry);
 
 			const outcome = await ctx.ui.custom<RunOutcome>((tui, theme, _kb, done) => {
 				const loader = new BorderedLoader(tui, theme, `🏛️ Council starting — ${STAGE_LABELS[1]}...`);

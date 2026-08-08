@@ -7,7 +7,11 @@
     "pi-package"
   ],
   "scripts": {
-    "test:migration": "node --test tests/pi-subagents-migration.test.mjs"
+    "test": "npm run test:migration && npm run test:council-adapters && npm run test:token-speed",
+    "test:migration": "node --test tests/pi-subagents-migration.test.mjs",
+    "test:council-adapters": "tsx tests/council-adapters.test.ts",
+    "test:token-speed": "tsx tests/token-speed.test.ts",
+    "test:council-e2e": "tsx extensions/council/council.test.ts"
   },
   "pi": {
     "extensions": [
@@ -32,6 +36,7 @@
     "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
+    "tsx": "4.23.11",
     "typescript": "5.9.3"
   }
 }

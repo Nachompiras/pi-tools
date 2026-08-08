@@ -98,10 +98,11 @@ test("historical Tintinweb migration notes are clearly superseded", () => {
 
 test("active Pi imports and peers use only the Earendil namespace", () => {
   const manifest = readJson("package.json");
+  const executableExtensions = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs"]);
   const piFiles = [
     "package.json",
     "package-lock.json",
-    ...filesUnder("extensions", ".ts"),
+    ...filesUnder("extensions").filter((path) => executableExtensions.has(extname(path))),
   ];
   for (const path of piFiles) {
     assert.doesNotMatch(read(path), /@mariozechner\/pi-/, `${path} contains the obsolete Pi namespace`);
