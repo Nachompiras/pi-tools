@@ -56,7 +56,10 @@ In the repository:
 - expose package agents with `pi.subagents.agents: ["./agents"]` in the manifest;
 - regenerate `package-lock.json` from a clean dependency installation;
 - remove the local image resources and their obsolete tests;
-- keep unrelated dependencies and resources unchanged.
+- remove the obsolete `extensions/discord/` integration and its `discord.js` dependency;
+- add `typescript@5.9.3` as a development dependency so the existing `tsconfig.json` has a reproducible compiler;
+- declare `@earendil-works/pi-coding-agent` as a `*` peer dependency because the separately developed `token-speed` extension imports Pi's runtime-provided package;
+- leave `extensions/token-speed/` and `tests/token-speed.test.ts` content untouched.
 
 Avoid simultaneously loading Tintinweb and Nicobailon orchestration extensions because they provide overlapping tool and UI concepts.
 
@@ -78,12 +81,19 @@ Workflow examples must return child failures instead of silently discarding them
 
 If package installation, dependency resolution, or automated verification fails, stop and report the exact failing command. Do not restore the old runtime alongside the new one as an implicit fallback.
 
+## TypeScript Baseline
+
+Make the tracked repository typecheck with TypeScript 5.9.3. Remove Discord rather than repairing its stale API usage. Correct Council's existing type errors without changing runtime behavior: use explicit discriminant checks where TypeScript does not narrow negated booleans, and type model lookup/auth callbacks from the Pi AI model contract.
+
+The only TypeScript file under `skills/` is a pedagogical fragment with intentionally unresolved example imports. Exclude that file from `tsconfig.json` rather than manufacturing fake modules. The untracked `token-speed` implementation remains owned by the other session; this migration changes only the package peer contract needed to resolve its Pi import.
+
 ## Verification
 
 Repository verification must include:
 
 - a clean dependency installation or lockfile regeneration;
-- the repository's typecheck and existing test suite;
+- the repository's TypeScript 5.9.3 typecheck and existing deterministic test suite;
+- checks that Discord and both local image extensions are absent;
 - image-related replacement/removal checks;
 - searches proving that active files no longer call the Tintinweb API or advertise its installation;
 - checks that package agent discovery is declared correctly;
@@ -98,7 +108,9 @@ The migration is complete when:
 - this package loads without `@tintinweb/pi-subagents`;
 - active skills and prompts use valid `pi-subagents@0.43.0` workflow syntax;
 - the custom `planner` and other package agents are discoverable;
-- neither local image extension is loaded;
+- neither local image extension nor the Discord extension is loaded;
+- `discord.js` is absent from the dependency graph;
 - `@getpipher/vision@0.5.2` is installed globally;
+- TypeScript 5.9.3 typechecks the repository without changing the `token-speed` source;
 - unrelated global Pi settings remain unchanged;
 - repository verification passes and any required interactive doctor check is clearly reported.

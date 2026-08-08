@@ -296,11 +296,11 @@ Run: `npm run test:migration`
 
 Expected: PASS with zero failures; manifests, agents, active workflows, and image-resource removal all satisfy the migration contract.
 
-- [ ] **Step 4: Run TypeScript validation after deletion**
+- [ ] **Step 4: Re-run TypeScript to update the failure baseline**
 
-Run: `npx tsc --noEmit`
+Run: `npm exec -- tsc --noEmit`
 
-Expected: exit 0. The deleted image modules must no longer contribute optional `sharp` or obsolete Pi API type errors.
+Expected at this stage: image modules no longer appear in diagnostics. Remaining failures are limited to tracked Discord/Council/example issues and the separately owned `token-speed` module-resolution contract addressed in Task 7.
 
 - [ ] **Step 5: Commit the vision replacement boundary**
 
@@ -309,7 +309,55 @@ git add -A extensions/image-label.ts extensions/image-describe tests/image-label
 git commit -m "refactor: replace local image extensions with vision"
 ```
 
-### Task 7: Migrate the Global Pi Installation Safely
+### Task 7: Remove Discord and Restore the TypeScript Baseline
+
+**Files:**
+- Delete: `extensions/discord/`
+- Modify: `package.json`
+- Modify: `package-lock.json`
+- Modify: `tsconfig.json`
+- Modify: `extensions/council/index.ts`
+- Modify: `extensions/council/openrouter.ts`
+- Test: `tests/pi-subagents-migration.test.mjs`
+- Do not modify: `extensions/token-speed/`, `tests/token-speed.test.ts`
+
+- [ ] **Step 1: Extend the migration contract and verify RED**
+
+Assert that `extensions/discord/` is absent, `discord.js` is absent from both manifests, `typescript` is pinned to 5.9.3 in `devDependencies`, and `@earendil-works/pi-coding-agent` is declared as a `*` peer. Run `npm run test:migration` and confirm it fails because Discord still exists and remains declared.
+
+- [ ] **Step 2: Remove Discord and its dependency**
+
+Delete the tracked Discord directory, remove `discord.js`, and regenerate the lockfile. Do not modify the unrelated `token-speed` source or test.
+
+- [ ] **Step 3: Make the compiler contract reproducible**
+
+Keep `typescript@5.9.3` in `devDependencies`, add `@earendil-works/pi-coding-agent: "*"` to peers, and exclude only `skills/systematic-debugging/condition-based-waiting-example.ts` because it is a pedagogical fragment with intentionally unresolved imports.
+
+- [ ] **Step 4: Correct Council's type contracts without changing behavior**
+
+Use explicit `ok === false` discriminant checks for config and run outcomes. Type `GetApiKeyAndHeaders` from the non-null return type of Pi AI's `getModel`, and type the provider argument from `Parameters<typeof getModel>[0]` rather than passing an arbitrary string.
+
+- [ ] **Step 5: Verify GREEN**
+
+Run:
+
+```bash
+npm run test:migration
+npm exec -- tsc --noEmit
+npx tsx extensions/council/council.test.ts
+```
+
+Expected: all three commands pass. `token-speed` compiles through the runtime peer contract without source edits.
+
+- [ ] **Step 6: Commit the TypeScript and Discord cleanup**
+
+```bash
+git add package.json package-lock.json tsconfig.json extensions/council tests/pi-subagents-migration.test.mjs
+git add -u extensions/discord
+git commit -m "refactor: remove discord and restore typecheck"
+```
+
+### Task 8: Migrate the Global Pi Installation Safely
 
 **Files:**
 - Modify via Pi commands: `~/.pi/agent/settings.json`
@@ -375,7 +423,7 @@ Run: `pi list`
 
 Expected: output identifies the local `pi-tools`, pinned `pi-subagents@0.43.0`, pinned `@getpipher/vision@0.5.2`, and unrelated packages, with no Tintinweb package.
 
-### Task 8: Run End-to-End Verification and Doctor
+### Task 9: Run End-to-End Verification and Doctor
 
 **Files:**
 - Verify only: repository and global Pi installation
@@ -397,7 +445,7 @@ Run:
 
 ```bash
 npm run test:migration
-npx tsc --noEmit
+npm exec -- tsc --noEmit
 git diff --check
 git status --short
 ```
