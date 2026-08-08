@@ -31,7 +31,7 @@ If project instructions say "don't use TDD" and a skill says "always use TDD," f
 
 ## Platform Adaptation
 
-Skills were originally written for Claude Code. In pi, use the `read` tool for loading skills/files, `bash` for running commands, `edit` for file changes, and `write` for creating files. When `@tintinweb/pi-subagents` is installed, use it for isolated subagent workflows (Agent, get_subagent_result, steer_subagent tools); otherwise adapt skills to sequential execution or other Pi-native mechanisms.
+Skills were originally written for Claude Code. In pi, use the `read` tool for loading skills/files, `bash` for running commands, `edit` for file changes, and `write` for creating files. When Nicobailon's `pi-subagents` is installed, orchestrate children with `subagent({ workflowScript })`, `runs.run`, `runs.all`, and `subagent_wait`; otherwise adapt skills to sequential execution or other Pi-native mechanisms.
 
 # Using Skills
 
