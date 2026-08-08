@@ -51,9 +51,9 @@ These definitions override same-named builtins at package priority. The custom `
 
 | Extension | Description |
 |-----------|-------------|
-| **image-label** | Detects dragged image paths, replaces with `[Image N]` labels |
 | **plan-mode** | Read-only exploration mode with plan step tracking |
 | **council** | Multi-model review council — sends a spec/plan/code file to multiple LLMs via OpenRouter, runs a 3-stage pipeline (independent review → anonymous peer ranking → chairman synthesis) |
+| **token-speed** | Preserves Pi's built-in footer and adds live TPS, session-average TPS, and average TTFT |
 
 #### Council Setup
 

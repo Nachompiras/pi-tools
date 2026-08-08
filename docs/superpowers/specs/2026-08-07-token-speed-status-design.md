@@ -26,26 +26,25 @@ Create a focused extension under `extensions/token-speed/`:
 
 - `index.ts` wires Pi lifecycle events to a tracker and publishes the formatted status through `ctx.ui.setStatus("token-speed", ...)`.
 - `tracker.ts` owns timing, rolling-window samples, completed-response aggregates, and formatting-independent metric calculations.
-- `tracker.test.ts` exercises calculations with a controllable clock and synthetic Pi events.
+- `tests/token-speed.test.ts` exercises calculations with a controllable clock and synthetic Pi events while staying outside extension discovery.
 
 Separating the tracker from Pi event wiring keeps timing logic deterministic and independently testable.
 
 ## Data Flow
 
 1. `session_start` clears all in-memory samples and displays placeholders.
-2. `before_provider_request` records the request start time for TTFT.
-3. `message_start` establishes the current assistant response.
-4. `message_update` observes `text_delta`, `thinking_delta`, and `toolcall_delta` events:
+2. `before_provider_request` resets transient response state and records the request start time for TTFT.
+3. `message_update` observes `text_delta`, `thinking_delta`, and `toolcall_delta` events:
    - The first non-empty delta records time to first token.
    - Each delta contributes an estimated token count to a five-second rolling window.
    - The status line is refreshed with live TPS.
-5. `message_end` for an assistant message:
+4. `message_end` for an assistant message:
    - Uses provider-reported `message.usage.output` as the authoritative completed token count.
    - Measures decode duration from first output to last output.
    - Stores the completed response TPS as the idle `TPS` value.
    - Adds output tokens and decode duration to session aggregates for weighted `AVG`.
    - Adds valid TTFT to the session mean.
-6. `agent_end`, aborted/error messages, session replacement, and `session_shutdown` clear transient response state so stale streams cannot affect later responses.
+5. `agent_end`, incomplete/error messages, session replacement, and `session_shutdown` clear transient response state so stale streams cannot affect later responses.
 
 ## Metric Definitions
 
