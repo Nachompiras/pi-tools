@@ -18,23 +18,32 @@ Show this to the user, then immediately proceed to Step 2. The user reads and th
 
 ### 2. Spawn sub-agents
 
-Spawn 3+ sub-agents in parallel using `Agent()` with `run_in_background: true`. Each must produce a **radically different** interface for the deepened module.
+Spawn 3+ read-only `planner` children in one foreground `runs.all(...)` workflow. Each must produce a **radically different** interface for the deepened module.
 
-Prompt each sub-agent with a separate technical brief (file paths, coupling details, dependency category from [DEEPENING.md](DEEPENING.md), what sits behind the seam). The brief is independent of the user-facing problem-space explanation in Step 1. Give each agent a different design constraint:
+Give every child a self-contained technical brief: file paths, coupling details, dependency category from [DEEPENING.md](DEEPENING.md), what sits behind the seam, and relevant domain language. Give each a different design constraint:
 
-- Agent 1: "Minimize the interface — aim for 1–3 entry points max. Maximise leverage per entry point."
-- Agent 2: "Maximise flexibility — support many use cases and extension."
-- Agent 3: "Optimise for the most common caller — make the default case trivial."
-- Agent 4 (if applicable): "Design around ports & adapters for cross-seam dependencies."
+- `minimal`: "Minimize the interface — aim for 1–3 entry points max. Maximise leverage per entry point."
+- `flexible`: "Maximise flexibility — support many use cases and extension."
+- `caller-optimized`: "Optimise for the most common caller — make the default case trivial."
+- `ports-and-adapters` when applicable: "Design around ports and adapters for cross-seam dependencies."
 
 Example dispatch:
-```
-Agent({ subagent_type: "worker", prompt: "Design a minimal interface...", description: "Interface design: minimal", run_in_background: true })
-Agent({ subagent_type: "worker", prompt: "Design a flexible interface...", description: "Interface design: flexible", run_in_background: true })
-Agent({ subagent_type: "worker", prompt: "Design for the common caller...", description: "Interface design: caller-optimized", run_in_background: true })
+
+```js
+subagent({
+  workflowScript: `
+    const designs = await runs.all([
+      { key: "minimal", agent: "planner", task: MINIMAL_INTERFACE_BRIEF },
+      { key: "flexible", agent: "planner", task: FLEXIBLE_INTERFACE_BRIEF },
+      { key: "caller-optimized", agent: "planner", task: CALLER_INTERFACE_BRIEF }
+    ]);
+    return designs.map(result => ({ key: result.key, output: result.output }));
+  `,
+  async: false
+})
 ```
 
-Collect results with `get_subagent_result({ agent_id, wait: true })`.
+The explicit return preserves every design for comparison. Add the fourth keyed item when cross-seam dependencies justify it.
 
 Include both [LANGUAGE.md](LANGUAGE.md) vocabulary and CONTEXT.md vocabulary in the brief so each sub-agent names things consistently with the architecture language and the project's domain language.
 

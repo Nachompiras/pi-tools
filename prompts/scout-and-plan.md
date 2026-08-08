@@ -1,9 +1,15 @@
 ---
-description: Scout gathers context, planner creates implementation plan (no implementation)
+description: Scout the codebase, then create an implementation plan
 ---
-Execute this workflow using two sequential Agent calls:
 
-1. Use Agent({ subagent_type: "scout", prompt: "Find all code relevant to: $@", description: "Scout: $@" }) to gather codebase context
-2. Use Agent({ subagent_type: "planner", prompt: "Create an implementation plan for '$@' using this context from the scout:\n\n[paste scout result]", description: "Plan: $@" }) to create a plan
+Create one foreground `subagent({ workflowScript, async: false })` workflow for this request:
 
-Run each agent in foreground (sequentially). Pass the scout's full result as context to the planner. Do NOT implement — just return the plan.
+$@
+
+Inside the script:
+
+1. Call `runs.run("scout", ...)` with agent `scout` and a self-contained task to find relevant files, entry points, data flow, tests, and risks.
+2. Await the result and call `runs.run("plan", ...)` with the custom `planner` agent. Include the full request and `scan.output` in its task.
+3. Explicitly return the planner output together with the scout evidence.
+
+Do not implement. Present the returned plan and important reconnaissance evidence to the user.

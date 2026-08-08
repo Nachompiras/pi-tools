@@ -138,16 +138,17 @@ subsequent commits land on that branch.
 
 ### Step 3 — Parallel auditing (RED of the audit cycle)
 
-1. For each auditor `i ∈ [0, N)`:
-   - Read `skills/auditing-codebase/auditor-prompt-template.md` and substitute
-     `{{TARGET}}`, `{{MODULE_NAME}}`, `{{LABEL}}` (= `a`/`b`/`c`/`d`),
-     `{{LENS_SKILL}}`, `{{BRANCH}}`.
-   - Dispatch via `Agent` with `subagent_type: general-purpose`,
-     `model: <auditor_i>`, `run_in_background: true`, and the interpolated
-     prompt.
-   - Record the returned agent ID.
-2. Wait for ALL agent IDs using `get_subagent_result(wait: true)` for each.
-3. For each auditor:
+1. For each auditor `i ∈ [0, N)`, read
+   `skills/auditing-codebase/auditor-prompt-template.md` and substitute
+   `{{TARGET}}`, `{{MODULE_NAME}}`, `{{LABEL}}` (= `a`/`b`/`c`/`d`),
+   `{{LENS_SKILL}}`, `{{BRANCH}}`.
+2. Build one `subagent({ workflowScript, async: false })` call whose script:
+   - creates one keyed `runs.all(...)` item per auditor;
+   - uses agent `delegate`, the auditor's configured `model`, and the fully
+     interpolated prompt as `task`;
+   - uses stable keys `auditor-a`, `auditor-b`, and so on;
+   - explicitly returns every key, output, status, and reported usage.
+3. Wait for that coordinated workflow to return, then for each auditor:
    - Success = the file `docs/audits/{module}-{label}.md` exists, is non-empty,
      AND contains at least one `## ` heading. Failures are recorded with the
      reason (timeout, error message, empty output, missing file).
@@ -174,10 +175,11 @@ In that case, set `aggregate_ranking = []` and continue to Step 5.
    (exact format documented in the template).
 3. Build `{{VALID_LABELS}}` = comma-separated `auditor_<label>` for each
    successful auditor.
-4. For each successful auditor, dispatch a fresh subagent with that auditor's
-   model and the interpolated peer-ranking prompt. Run them in parallel with
-   `run_in_background: true`.
-5. Parse each response by finding `FINAL RANKING:` and extracting the numbered
+4. Dispatch peer rankers in one foreground workflow with one keyed
+   `runs.all(...)` item per successful auditor. Use agent `delegate`, that
+   auditor's model, and the interpolated peer-ranking prompt. Explicitly return
+   every keyed output.
+5. Parse each returned output by finding `FINAL RANKING:` and extracting the numbered
    `auditor_<label>` lines. Discard a ranking if it omits any valid label or
    includes an unknown one.
 6. Compute aggregate ranking: for each label, average its position across all
@@ -191,8 +193,10 @@ In that case, set `aggregate_ranking = []` and continue to Step 5.
 2. Interpolate all placeholders EXCEPT `{{LABEL_TO_MODEL_TABLE}}` (the judge
    does not see model names). Use `{{TOTAL_COST}}` = the running sum of
    subagent costs reported so far, or `unknown` if not available.
-3. Dispatch the judge subagent with `model: <judge>`. NOT in background — wait
-   inline; this is the critical synthesis step.
+3. Dispatch the judge through a foreground `subagent({ workflowScript,
+   async: false })` call. The script must return one `runs.run("judge", ...)`
+   child using agent `delegate`, the configured judge model, and the fully
+   interpolated task. This is the critical synthesis step.
 4. Verify the judge produced `docs/audits/{module}-consolidated.md` with the
    required headings (`## Executive Summary`, `## Quick Wins`,
    `## Confirmed Findings`, `## Appendix A`, `## Appendix B`, `## Appendix C`).
