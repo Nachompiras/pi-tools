@@ -5,6 +5,9 @@
   "keywords": [
     "pi-package"
   ],
+  "scripts": {
+    "test:migration": "node --test tests/pi-subagents-migration.test.mjs"
+  },
   "pi": {
     "extensions": [
       "./extensions"
