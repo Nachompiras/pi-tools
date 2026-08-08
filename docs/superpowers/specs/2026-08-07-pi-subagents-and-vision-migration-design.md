@@ -58,7 +58,8 @@ In the repository:
 - remove the local image resources and their obsolete tests;
 - remove the obsolete `extensions/discord/` integration and its `discord.js` dependency;
 - add `typescript@5.9.3` as a development dependency so the existing `tsconfig.json` has a reproducible compiler;
-- declare `@earendil-works/pi-coding-agent` as a `*` peer dependency because the separately developed `token-speed` extension imports Pi's runtime-provided package;
+- migrate the remaining active extension imports from the obsolete `@mariozechner/pi-*` namespace to Pi's current `@earendil-works/pi-*` namespace;
+- declare each imported Earendil Pi core package as a `*` peer dependency and remove the obsolete Mario peers;
 - leave `extensions/token-speed/` and `tests/token-speed.test.ts` content untouched.
 
 Avoid simultaneously loading Tintinweb and Nicobailon orchestration extensions because they provide overlapping tool and UI concepts.
@@ -80,6 +81,10 @@ Before installation, inspect the target package manifests and lifecycle scripts.
 Workflow examples must return child failures instead of silently discarding them. Asynchronous examples must retain and wait on the returned workflow identifier. Parallel workflows must use one coordinated `runs.all(...)` call so failures and concurrency are managed by the runtime.
 
 If package installation, dependency resolution, or automated verification fails, stop and report the exact failing command. Do not restore the old runtime alongside the new one as an implicit fallback.
+
+## Pi Package Namespace and Security
+
+Use only `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` in active extensions and peer dependencies. The obsolete Mario package line is affected by published high-severity advisories; removing it must also remove its vulnerable transitive graph from `package-lock.json`. Verify the final production dependency graph with `npm audit --omit=dev`.
 
 ## TypeScript Baseline
 
@@ -109,7 +114,9 @@ The migration is complete when:
 - active skills and prompts use valid `pi-subagents@0.43.0` workflow syntax;
 - the custom `planner` and other package agents are discoverable;
 - neither local image extension nor the Discord extension is loaded;
-- `discord.js` is absent from the dependency graph;
+- `discord.js` and all `@mariozechner/pi-*` packages are absent from the dependency graph;
+- active Pi imports and peers use the `@earendil-works` namespace;
+- the production npm audit reports no known vulnerabilities;
 - `@getpipher/vision@0.5.2` is installed globally;
 - TypeScript 5.9.3 typechecks the repository without changing the `token-speed` source;
 - unrelated global Pi settings remain unchanged;
