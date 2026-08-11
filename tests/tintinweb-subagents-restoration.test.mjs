@@ -127,23 +127,26 @@ test("primary workflows use Tintinweb", () => {
     assert.match(resources, pattern);
   }
 
-  const parallelDispatch = markdownSection(
-    "skills/dispatching-parallel-agents/SKILL.md",
-    "### 2. Dispatch Background Agents, Then Collect Results",
-    "### 3. Sequential Pipelines",
-  );
-  const writerCalls = parallelDispatch
+  const dispatchSkill = read("skills/dispatching-parallel-agents/SKILL.md");
+  const writerCalls = dispatchSkill
     .split("\n")
-    .filter((line) => line.startsWith("Agent({") && /subagent_type: ["']worker["']/.test(line));
-  assert.ok(writerCalls.length >= 3, "parallel dispatch must show every writer explicitly");
+    .filter((line) =>
+      line.startsWith("Agent({") &&
+      /subagent_type: ["']worker["']/.test(line) &&
+      /run_in_background: true/.test(line),
+    );
+  assert.ok(writerCalls.length >= 4, "parallel dispatch must show every writer explicitly");
   for (const call of writerCalls) {
-    assert.match(call, /run_in_background: true/, "each parallel writer must run in background");
     assert.match(call, /isolation: ["']worktree["']/, "each parallel writer must use worktree isolation");
     assert.match(call, /isolation[^.]*fail[^.]*STOP without edits/i, "each writer must abort if isolation fails");
     assert.match(call, /Do not commit/i, "each isolated writer must leave changes for the runtime");
-    assert.match(call, /branch/i, "each isolated writer prompt must expect a returned branch");
+    assert.match(
+      call,
+      /(?:runtime to return as a branch|Tintinweb return the isolated branch)/i,
+      "each isolated writer prompt must require a runtime-returned branch",
+    );
   }
-  assert.match(parallelDispatch, /integrate returned branches one at a time/i);
+  assert.match(dispatchSkill, /integrate returned branches one at a time/i);
 });
 
 test("subagent-driven development uses Tintinweb", () => {
