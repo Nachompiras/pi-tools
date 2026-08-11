@@ -132,11 +132,18 @@ test("primary workflows use Tintinweb", () => {
     "### 2. Dispatch Background Agents, Then Collect Results",
     "### 3. Sequential Pipelines",
   );
-  const isolatedWriterCalls = parallelDispatch.match(
-    /Agent\(\{[^\n]*subagent_type: ["']worker["'][^\n]*run_in_background: true[^\n]*isolation: ["']worktree["'][^\n]*\}\)/g,
-  ) ?? [];
-  assert.ok(isolatedWriterCalls.length >= 3, "parallel dispatch writers must use worktree isolation");
-  assert.match(parallelDispatch, /isolation[^.\n]*fail[\s\S]*stop[\s\S]*without[^.\n]*edit/i);
+  const writerCalls = parallelDispatch
+    .split("\n")
+    .filter((line) => line.startsWith("Agent({") && /subagent_type: ["']worker["']/.test(line));
+  assert.ok(writerCalls.length >= 3, "parallel dispatch must show every writer explicitly");
+  for (const call of writerCalls) {
+    assert.match(call, /run_in_background: true/, "each parallel writer must run in background");
+    assert.match(call, /isolation: ["']worktree["']/, "each parallel writer must use worktree isolation");
+    assert.match(call, /isolation[^.]*fail[^.]*STOP without edits/i, "each writer must abort if isolation fails");
+    assert.match(call, /Do not commit/i, "each isolated writer must leave changes for the runtime");
+    assert.match(call, /branch/i, "each isolated writer prompt must expect a returned branch");
+  }
+  assert.match(parallelDispatch, /integrate returned branches one at a time/i);
 });
 
 test("subagent-driven development uses Tintinweb", () => {
