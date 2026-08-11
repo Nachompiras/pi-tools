@@ -1,5 +1,7 @@
 # Pi Subagents and Vision Migration Implementation Plan
 
+> **Historical — subagent portion reverted.** The migration to Nicobailon's runtime was reversed by `docs/superpowers/specs/2026-08-10-tintinweb-subagents-restoration-design.md`. Retain this completed plan only as a record of the earlier migration.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make this package and the user's global Pi installation use `pi-subagents@0.43.0` and `@getpipher/vision@0.5.2`, with no active Tintinweb or local image-extension runtime.

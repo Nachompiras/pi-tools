@@ -1,5 +1,7 @@
 # Pi Subagents and Vision Migration Design
 
+> **Historical — subagent portion reverted.** The migration to Nicobailon's runtime was reversed by `docs/superpowers/specs/2026-08-10-tintinweb-subagents-restoration-design.md`. The Vision decisions below remain historical context for the image migration, not current subagent setup guidance.
+
 ## Purpose
 
 Migrate this package from `@tintinweb/pi-subagents` to Nicobailon's `pi-subagents` and replace the local `image-label` and `image-describe` extensions with `@getpipher/vision`. Update both the repository and the user's global Pi installation without changing unrelated Pi preferences.

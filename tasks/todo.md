@@ -1,6 +1,6 @@
 # Historical: Migrar de extensión propia de subagentes a @tintinweb/pi-subagents
 
-> Superseded by `docs/superpowers/specs/2026-08-07-pi-subagents-and-vision-migration-design.md`. This file records the completed 2026 Tintinweb migration and is not current setup guidance.
+> This file records the completed 2026 migration from the repository's own extension to Tintinweb. The later Nicobailon migration in `docs/superpowers/specs/2026-08-07-pi-subagents-and-vision-migration-design.md` was itself reverted by `docs/superpowers/specs/2026-08-10-tintinweb-subagents-restoration-design.md`; use the 2026-08-10 design for current subagent guidance.
 
 ## ✅ COMPLETADO
 

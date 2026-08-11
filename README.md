@@ -22,18 +22,30 @@ pi update
 
 ## Dependencies
 
-Install the pinned Pi packages used by the subagent and image workflows:
+Install the subagent runtime and the pinned image workflow package:
 
 ```bash
-pi install npm:pi-subagents@0.43.0
+pi install npm:@tintinweb/pi-subagents
 pi install npm:@getpipher/vision@0.5.2
 ```
 
-[`pi-subagents`](https://github.com/nicobailon/pi-subagents) provides the `subagent` and `subagent_wait` tools. [`@getpipher/vision`](https://github.com/getpipher/vision) owns image labeling, attachment routing, and descriptions for text-only models; this package does not duplicate that behavior.
+[`@tintinweb/pi-subagents`](https://github.com/tintinweb/pi-subagents) provides the `Agent`, `get_subagent_result`, and `steer_subagent` tools. [`@getpipher/vision`](https://github.com/getpipher/vision) owns image labeling, attachment routing, and descriptions for text-only models; this package does not duplicate that behavior.
 
-## Custom Agents
+## Custom Agent Setup
 
-The package exposes `agents/` through `pi.subagents.agents`, so Pi discovers these definitions automatically—no manual copy step is required.
+Several skills reference custom agent types defined in `agents/`. Copy them to your global agents directory:
+
+```bash
+mkdir -p ~/.pi/agent/agents
+cp agents/*.md ~/.pi/agent/agents/
+```
+
+This makes the agents available in all projects. To install them for only one project:
+
+```bash
+mkdir -p .pi/agents
+cp agents/*.md .pi/agents/
+```
 
 | Agent | Purpose | Model |
 |-------|---------|-------|
@@ -43,7 +55,7 @@ The package exposes `agents/` through `pi.subagents.agents`, so Pi discovers the
 | `planner` | Implementation planning from context and requirements (read-only) | inherits configured default |
 | `scout` | Fast codebase recon for handoff to other agents (read-only) | minimax-m2.7 |
 
-These definitions override same-named builtins at package priority. The custom `planner` remains a planning specialist; Nicobailon's builtin `oracle` is instead an advisory second opinion for risky decisions.
+These custom definitions work alongside Tintinweb's built-in `general-purpose`, `Explore`, and `Plan` subagent types.
 
 ## What's Included
 
