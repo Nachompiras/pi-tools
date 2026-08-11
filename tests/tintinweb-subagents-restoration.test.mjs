@@ -93,6 +93,15 @@ test("package selects Tintinweb and preserves current package contracts", () => 
   }
   assert.equal(manifest.devDependencies?.typescript, "5.9.3");
   assert.equal(manifest.devDependencies?.tsx, "4.23.11");
+
+  const runtimeManifest = readJson("node_modules/@tintinweb/pi-subagents/package.json");
+  const extensionPath = runtimeManifest.pi?.extensions?.[0]?.replace(/^\.\//, "");
+  assert.ok(extensionPath, "Tintinweb must publish a Pi extension entrypoint");
+  const runtimeSource = read(`node_modules/@tintinweb/pi-subagents/${extensionPath}`);
+  assert.match(runtimeSource, /name:\s*["']Agent["'][\s\S]*?prompt:\s*Type\.String[\s\S]*?subagent_type:\s*Type\.String[\s\S]*?run_in_background:\s*Type\.Optional[\s\S]*?isolation:\s*Type\.Optional/);
+  assert.match(runtimeSource, /name:\s*["']get_subagent_result["'][\s\S]*?agent_id:\s*Type\.String[\s\S]*?wait:\s*Type\.Optional/);
+  assert.match(runtimeSource, /name:\s*["']steer_subagent["'][\s\S]*?agent_id:\s*Type\.String[\s\S]*?message:\s*Type\.String/);
+  assert.match(runtimeSource, /Type\.Literal\(["']worktree["']/);
 });
 
 test("agents use Tintinweb frontmatter", () => {
@@ -117,6 +126,17 @@ test("primary workflows use Tintinweb", () => {
   ]) {
     assert.match(resources, pattern);
   }
+
+  const parallelDispatch = markdownSection(
+    "skills/dispatching-parallel-agents/SKILL.md",
+    "### 2. Dispatch Background Agents, Then Collect Results",
+    "### 3. Sequential Pipelines",
+  );
+  const isolatedWriterCalls = parallelDispatch.match(
+    /Agent\(\{[^\n]*subagent_type: ["']worker["'][^\n]*run_in_background: true[^\n]*isolation: ["']worktree["'][^\n]*\}\)/g,
+  ) ?? [];
+  assert.ok(isolatedWriterCalls.length >= 3, "parallel dispatch writers must use worktree isolation");
+  assert.match(parallelDispatch, /isolation[^.\n]*fail[\s\S]*stop[\s\S]*without[^.\n]*edit/i);
 });
 
 test("subagent-driven development uses Tintinweb", () => {
@@ -153,6 +173,15 @@ test("subagent-driven development uses Tintinweb", () => {
   assert.match(implementerPrompt, /runtime[\s\S]*branch/i);
   assert.match(implementerPrompt, /isolation[^.\n]*fail[\s\S]*stop[\s\S]*without[^.\n]*edit/i);
   assert.match(skill, /falls back[\s\S]*abort without edits/i);
+
+  const backgroundReviewerCalls = skill.match(
+    /Agent\(\{[^\n]*subagent_type: ["']reviewer["'][^\n]*run_in_background: true[^\n]*\}\)/g,
+  ) ?? [];
+  const collectedReviewerResults = skill.match(
+    /get_subagent_result\(\{ agent_id: ["'](?:spec|quality)-review-[^"']+["'], wait: true \}\)/g,
+  ) ?? [];
+  assert.ok(backgroundReviewerCalls.length > 0, "the skill must show parallel background reviewers");
+  assert.equal(collectedReviewerResults.length, backgroundReviewerCalls.length);
 });
 
 test("specialized workflows use Tintinweb", () => {

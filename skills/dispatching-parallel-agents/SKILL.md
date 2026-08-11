@@ -9,7 +9,7 @@ Delegate independent tasks to specialized subagents running concurrently, using 
 
 **Why parallel:** Independent tasks don't need to be sequential. Run them simultaneously, get results faster, keep each agent focused on a narrow scope.
 
-**Core principle:** Launch background agents with `Agent({ run_in_background: true })`, then collect results with `get_subagent_result()`. A persistent widget shows spinners, status icons, and live progress for all running agents.
+**Core principle:** Launch read-only agents with `run_in_background: true`. Every parallel writer must also use `isolation: "worktree"`, abort without edits if isolation fails, and leave changes uncommitted for Tintinweb to return as a branch. Collect every result with `get_subagent_result()`.
 
 ## When to Use
 
@@ -17,10 +17,11 @@ Delegate independent tasks to specialized subagents running concurrently, using 
 - 2+ tasks are clearly independent (different files, different subsystems)
 - No task needs output from another to start
 - No shared state between agents (no same-file edits)
+- Every parallel writer can run in an isolated worktree and return a branch for sequential integration
 - You want live progress from all agents simultaneously
 
 **Don't use when:**
-- Tasks share files (causes conflicts — use `isolation: "worktree"` if needed)
+- Tasks share files (worktree isolation prevents index races, not logical merge conflicts)
 - Task B depends on Task A's output (use sequential foreground calls instead)
 - You need to understand full system state first
 - You're still debugging (explore root cause first, then parallelize fixes)
@@ -39,10 +40,10 @@ Group tasks by file scope:
 Launch all independent tasks as background agents, then wait for each result:
 
 ```
-# Launch all agents in the background
-Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/auth.test.ts: [paste test names + errors]", description: "fix auth tests", run_in_background: true })
-Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/payments.test.ts: [paste test names + errors]", description: "fix payment tests", run_in_background: true })
-Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/notifications.test.ts: [paste test names + errors]", description: "fix notification tests", run_in_background: true })
+# Launch all writers in isolated worktrees. Include the safety guard in every prompt.
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing auth tests. Worktree safety: if isolation fails or you see a fallback-to-main warning, STOP without edits. Do not commit; leave changes for the runtime to return as a branch.", description: "fix auth tests", run_in_background: true, isolation: "worktree" })
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing payment tests. Worktree safety: if isolation fails or you see a fallback-to-main warning, STOP without edits. Do not commit; leave changes for the runtime to return as a branch.", description: "fix payment tests", run_in_background: true, isolation: "worktree" })
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing notification tests. Worktree safety: if isolation fails or you see a fallback-to-main warning, STOP without edits. Do not commit; leave changes for the runtime to return as a branch.", description: "fix notification tests", run_in_background: true, isolation: "worktree" })
 
 # Collect results (use agent_id returned by each Agent() call)
 get_subagent_result({ agent_id: "<id-from-agent-1>", wait: true })
@@ -50,7 +51,7 @@ get_subagent_result({ agent_id: "<id-from-agent-2>", wait: true })
 get_subagent_result({ agent_id: "<id-from-agent-3>", wait: true })
 ```
 
-The persistent widget shows spinners and status icons for all running agents. Results are collected as each agent finishes.
+The persistent widget shows progress for all running agents. Each successful writer result must name an isolated branch. Treat a fallback warning or a missing branch for a task that should change files as failure. Inspect and integrate returned branches one at a time, running integration tests after each.
 
 ### 3. Sequential Pipelines (Foreground Agents)
 
@@ -77,7 +78,7 @@ Agent({ subagent_type: "worker", prompt: "Fix the race condition in src/queue.ts
 
 ### 5. Mid-Run Steering
 
-If a running agent goes off-track, redirect it without aborting:
+If a running background agent goes off-track, redirect it without aborting. Foreground calls block and cannot be steered mid-run:
 
 ```
 steer_subagent({ agent_id: "<id>", message: "Stop refactoring — focus only on the failing test. The error is in line 42." })
@@ -85,11 +86,13 @@ steer_subagent({ agent_id: "<id>", message: "Stop refactoring — focus only on 
 
 ### 6. Worktree Isolation
 
-When parallel tasks might touch overlapping files, use worktree isolation:
+Worktree isolation is mandatory for every parallel writer, even when file ownership is disjoint:
 
 ```
-Agent({ subagent_type: "worker", prompt: "Refactor auth module", description: "auth refactor", isolation: "worktree", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Refactor auth. If isolation fails or falls back to the main worktree, STOP without edits. Do not commit; let Tintinweb return the isolated branch.", description: "auth refactor", isolation: "worktree", run_in_background: true })
 ```
+
+Tintinweb 0.5.2 falls back to the shared parent worktree when isolation creation fails. The prompt-level abort guard is therefore required; `isolation: "worktree"` alone is not sufficient. After collection, verify a branch was returned and integrate it sequentially.
 
 ## Writing Focused Agent Tasks
 

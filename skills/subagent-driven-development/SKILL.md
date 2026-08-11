@@ -156,12 +156,20 @@ get_subagent_result({ agent_id: "agent-3", wait: true })
 # Inspect and cherry-pick/merge those branches one at a time, resolving conflicts
 # and running integration tests before review.
 
-# After integration, spec reviewers run in parallel
+# After integration, spec reviewers run in parallel. Record every returned ID.
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 1: [requirements + T1 report]", description: "Spec review: Task 1", run_in_background: true })
+# → agent_id: "spec-review-pattern-1"
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 2: [requirements + T2 report]", description: "Spec review: Task 2", run_in_background: true })
+# → agent_id: "spec-review-pattern-2"
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 3: [requirements + T3 report]", description: "Spec review: Task 3", run_in_background: true })
+# → agent_id: "spec-review-pattern-3"
 
-# Wait for all, then dispatch quality reviewers the same way
+# Collect every full review before evaluating the gate
+get_subagent_result({ agent_id: "spec-review-pattern-1", wait: true })
+get_subagent_result({ agent_id: "spec-review-pattern-2", wait: true })
+get_subagent_result({ agent_id: "spec-review-pattern-3", wait: true })
+
+# Only after collection, dispatch quality reviewers and collect them the same way
 ```
 
 ### Sequential Dispatch Pattern
@@ -281,12 +289,18 @@ get_subagent_result({ agent_id: "agent-3", wait: true })  # ✓
 [Inspect and integrate each returned worktree branch sequentially]
 [Run integration tests]
 
-[Dispatch parallel spec reviewers]
+[Dispatch parallel spec reviewers and record IDs]
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 1: [requirements + T1 report]", description: "Spec review: Task 1", run_in_background: true })
+# → agent_id: "spec-review-example-1"
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 2: [requirements + T2 report]", description: "Spec review: Task 2", run_in_background: true })
+# → agent_id: "spec-review-example-2"
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 3: [requirements + T3 report]", description: "Spec review: Task 3", run_in_background: true })
+# → agent_id: "spec-review-example-3"
 
-[Collect spec review results]
+[Collect every full spec review result]
+get_subagent_result({ agent_id: "spec-review-example-1", wait: true })
+get_subagent_result({ agent_id: "spec-review-example-2", wait: true })
+get_subagent_result({ agent_id: "spec-review-example-3", wait: true })
 Task 1: ✅ Spec compliant
 Task 2: ❌ Missing: Progress reporting (spec says "report every 100 items")
 Task 3: ✅ Spec compliant
@@ -298,12 +312,18 @@ Agent({ subagent_type: "worker", prompt: "Fix Task 2: add progress reporting eve
 Agent({ subagent_type: "reviewer", prompt: "Re-review spec compliance for Task 2: [requirements + fix report]", description: "Re-review: Task 2 spec" })
 Task 2: ✅ Spec compliant
 
-[Dispatch parallel code quality reviewers for all 3]
+[Dispatch parallel code quality reviewers for all 3 and record IDs]
 Agent({ subagent_type: "reviewer", prompt: "Code quality for Task 1: base sha X, head sha Y...", description: "Quality review: Task 1", run_in_background: true })
+# → agent_id: "quality-review-example-1"
 Agent({ subagent_type: "reviewer", prompt: "Code quality for Task 2: base sha X, head sha Y...", description: "Quality review: Task 2", run_in_background: true })
+# → agent_id: "quality-review-example-2"
 Agent({ subagent_type: "reviewer", prompt: "Code quality for Task 3: base sha X, head sha Y...", description: "Quality review: Task 3", run_in_background: true })
+# → agent_id: "quality-review-example-3"
 
-[Collect quality review results]
+[Collect every full quality review result]
+get_subagent_result({ agent_id: "quality-review-example-1", wait: true })
+get_subagent_result({ agent_id: "quality-review-example-2", wait: true })
+get_subagent_result({ agent_id: "quality-review-example-3", wait: true })
 All ✅ — mark Tasks 1, 2, 3 complete in TodoWrite
 
 === Sequential: Task 4 (depends on Task 3) ===
