@@ -7,8 +7,8 @@
     "pi-package"
   ],
   "scripts": {
-    "test": "npm run test:migration && npm run test:council-adapters && npm run test:token-speed",
-    "test:migration": "node --test tests/pi-subagents-migration.test.mjs",
+    "test": "npm run test:subagents && npm run test:council-adapters && npm run test:token-speed",
+    "test:subagents": "node --test tests/tintinweb-subagents-restoration.test.mjs",
     "test:council-adapters": "tsx tests/council-adapters.test.ts",
     "test:token-speed": "tsx tests/token-speed.test.ts",
     "test:council-e2e": "tsx extensions/council/council.test.ts"
