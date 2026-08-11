@@ -11,7 +11,7 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
-**Parallelism:** Tasks that touch independent files can run in parallel using `Agent()` with `run_in_background: true`, then collecting results with `get_subagent_result()`. Tasks with shared file dependencies must run sequentially.
+**Parallelism:** Tasks that touch independent files can run in parallel using `Agent()` with `run_in_background: true` and `isolation: "worktree"`, then collecting results with `get_subagent_result()`. Integrate each returned branch sequentially before review. Tasks with shared file dependencies must run sequentially.
 
 ## When to Use
 
@@ -50,8 +50,9 @@ digraph process {
 
     subgraph cluster_parallel {
         label="Parallel Batch (independent tasks)";
-        "Dispatch parallel implementers via Agent(run_in_background:true)" [shape=box];
+        "Dispatch isolated implementers via Agent(background, worktree)" [shape=box];
         "Collect all results via get_subagent_result(wait:true)" [shape=box];
+        "Integrate returned branches sequentially and test" [shape=box];
         "Dispatch parallel spec reviewers via Agent(run_in_background:true)" [shape=box];
         "All spec reviews pass?" [shape=diamond];
         "Fix failing tasks (re-dispatch implementers)" [shape=box];
@@ -62,9 +63,10 @@ digraph process {
 
     subgraph cluster_sequential {
         label="Sequential (dependent tasks)";
-        "Dispatch implementer via Agent() (./implementer-prompt.md)" [shape=box];
-        "Implementer subagent asks questions?" [shape=diamond];
-        "Answer questions via steer_subagent()" [shape=box];
+        "Dispatch one implementer via Agent(background:true)" [shape=box];
+        "New guidance needed while running?" [shape=diamond];
+        "Send guidance via steer_subagent()" [shape=box];
+        "Collect result via get_subagent_result(wait:true)" [shape=box];
         "Implementer subagent implements, tests, commits, self-reviews" [shape=box];
         "Dispatch spec reviewer via Agent() (./spec-reviewer-prompt.md)" [shape=box];
         "Spec reviewer confirms code matches spec?" [shape=diamond];
@@ -80,11 +82,12 @@ digraph process {
     "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
     "Read plan, extract all tasks with full text, note context, create TodoWrite" -> "Analyze task independence: which tasks touch independent files?";
-    "Analyze task independence: which tasks touch independent files?" -> "Dispatch parallel implementers via Agent(run_in_background:true)" [label="independent"];
-    "Analyze task independence: which tasks touch independent files?" -> "Dispatch implementer via Agent() (./implementer-prompt.md)" [label="dependent"];
+    "Analyze task independence: which tasks touch independent files?" -> "Dispatch isolated implementers via Agent(background, worktree)" [label="independent"];
+    "Analyze task independence: which tasks touch independent files?" -> "Dispatch one implementer via Agent(background:true)" [label="dependent"];
 
-    "Dispatch parallel implementers via Agent(run_in_background:true)" -> "Collect all results via get_subagent_result(wait:true)";
-    "Collect all results via get_subagent_result(wait:true)" -> "Dispatch parallel spec reviewers via Agent(run_in_background:true)";
+    "Dispatch isolated implementers via Agent(background, worktree)" -> "Collect all results via get_subagent_result(wait:true)";
+    "Collect all results via get_subagent_result(wait:true)" -> "Integrate returned branches sequentially and test";
+    "Integrate returned branches sequentially and test" -> "Dispatch parallel spec reviewers via Agent(run_in_background:true)";
     "Dispatch parallel spec reviewers via Agent(run_in_background:true)" -> "All spec reviews pass?";
     "All spec reviews pass?" -> "Fix failing tasks (re-dispatch implementers)" [label="no"];
     "Fix failing tasks (re-dispatch implementers)" -> "Dispatch parallel spec reviewers via Agent(run_in_background:true)";
@@ -94,10 +97,11 @@ digraph process {
     "Fix quality issues (re-dispatch implementers)" -> "Dispatch parallel code quality reviewers via Agent(run_in_background:true)";
     "All quality reviews pass?" -> "More tasks remain?" [label="yes"];
 
-    "Dispatch implementer via Agent() (./implementer-prompt.md)" -> "Implementer subagent asks questions?";
-    "Implementer subagent asks questions?" -> "Answer questions via steer_subagent()" [label="yes"];
-    "Answer questions via steer_subagent()" -> "Dispatch implementer via Agent() (./implementer-prompt.md)";
-    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits, self-reviews" [label="no"];
+    "Dispatch one implementer via Agent(background:true)" -> "New guidance needed while running?";
+    "New guidance needed while running?" -> "Send guidance via steer_subagent()" [label="yes"];
+    "Send guidance via steer_subagent()" -> "New guidance needed while running?";
+    "New guidance needed while running?" -> "Collect result via get_subagent_result(wait:true)" [label="no / finished"];
+    "Collect result via get_subagent_result(wait:true)" -> "Implementer subagent implements, tests, commits, self-reviews";
     "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer via Agent() (./spec-reviewer-prompt.md)";
     "Dispatch spec reviewer via Agent() (./spec-reviewer-prompt.md)" -> "Spec reviewer confirms code matches spec?";
     "Spec reviewer confirms code matches spec?" -> "Fix spec gaps" [label="no"];
@@ -109,8 +113,8 @@ digraph process {
     "Code quality reviewer approves?" -> "Mark task complete in TodoWrite" [label="yes"];
     "Mark task complete in TodoWrite" -> "More tasks remain?";
 
-    "More tasks remain?" -> "Dispatch implementer via Agent() (./implementer-prompt.md)" [label="yes - dependent"];
-    "More tasks remain?" -> "Dispatch parallel implementers via Agent(run_in_background:true)" [label="yes - independent batch"];
+    "More tasks remain?" -> "Dispatch one implementer via Agent(background:true)" [label="yes - dependent"];
+    "More tasks remain?" -> "Dispatch isolated implementers via Agent(background, worktree)" [label="yes - independent batch"];
     "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
     "Dispatch final code reviewer subagent for entire implementation" -> "Use superpowers:finishing-a-development-branch";
 }
@@ -118,7 +122,7 @@ digraph process {
 
 ## Parallelism with Agent()
 
-The `@tintinweb/pi-subagents` package provides `Agent()`, `get_subagent_result()`, and `steer_subagent()` tools. Use `run_in_background: true` for parallel execution when tasks are independent (no shared file edits).
+The `@tintinweb/pi-subagents` package provides `Agent()`, `get_subagent_result()`, and `steer_subagent()` tools. Use `run_in_background: true` with `isolation: "worktree"` for parallel writers. Read-only reviewers may share the parent worktree.
 
 ### Assessing Independence
 
@@ -134,11 +138,11 @@ A task is independent if:
 
 ```
 # Implementers in parallel (all touch independent files)
-Agent({ subagent_type: "worker", prompt: "Implement Task 1: [full text + context]", description: "Task 1: hook install script", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 1: [full text + context]", description: "Task 1: hook install script", run_in_background: true, isolation: "worktree" })
 # → returns agent_id: "agent-1"
-Agent({ subagent_type: "worker", prompt: "Implement Task 2: [full text + context]", description: "Task 2: recovery modes", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 2: [full text + context]", description: "Task 2: recovery modes", run_in_background: true, isolation: "worktree" })
 # → returns agent_id: "agent-2"
-Agent({ subagent_type: "worker", prompt: "Implement Task 3: [full text + context]", description: "Task 3: config parser", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 3: [full text + context]", description: "Task 3: config parser", run_in_background: true, isolation: "worktree" })
 # → returns agent_id: "agent-3"
 
 # Wait for all to complete
@@ -146,7 +150,11 @@ get_subagent_result({ agent_id: "agent-1", wait: true })
 get_subagent_result({ agent_id: "agent-2", wait: true })
 get_subagent_result({ agent_id: "agent-3", wait: true })
 
-# After all complete, spec reviewers in parallel
+# Each result names the branch created by worktree isolation.
+# Inspect and cherry-pick/merge those branches one at a time, resolving conflicts
+# and running integration tests before review.
+
+# After integration, spec reviewers run in parallel
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 1: [requirements + T1 report]", description: "Spec review: Task 1", run_in_background: true })
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 2: [requirements + T2 report]", description: "Spec review: Task 2", run_in_background: true })
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 3: [requirements + T3 report]", description: "Spec review: Task 3", run_in_background: true })
@@ -156,13 +164,20 @@ Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 3: [require
 
 ### Sequential Dispatch Pattern
 
-```
-# Single foreground agent (blocks until complete)
-Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + context]", description: "Task 4: integration layer" })
+A dependent writer still runs alone in the parent worktree. Launch it in the background only when steering may be needed; do not start another writer until its result is collected.
 
-# If the agent needs guidance mid-task:
-steer_subagent({ agent_id: "agent-4", message: "The config format changed — use TOML not YAML. See src/config.toml for the schema." })
 ```
+Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + context]", description: "Task 4: integration layer", run_in_background: true })
+# → returns agent_id: "agent-4"
+
+# Optional: send new information while the background agent is running
+steer_subagent({ agent_id: "agent-4", message: "The config format changed — use TOML not YAML. See src/config.toml for the schema." })
+
+# Always collect the result before review or another writer
+get_subagent_result({ agent_id: "agent-4", wait: true })
+```
+
+If no steering can be needed, a foreground `Agent()` call is simpler. A foreground call blocks and cannot be steered mid-run. If a completed agent reports `NEEDS_CONTEXT`, provide the missing context and re-dispatch it.
 
 **Max concurrency:** Up to 4 agents run concurrently by default. Configurable via `/agents` → Settings.
 
@@ -247,11 +262,11 @@ You: I'm using Subagent-Driven Development to execute this plan.
 === Parallel Batch: Tasks 1, 2, 3 ===
 
 [Dispatch parallel implementers]
-Agent({ subagent_type: "worker", prompt: "Implement Task 1: Hook installation script. [full text]...", description: "Task 1: hook install", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 1: Hook installation script. [full text]...", description: "Task 1: hook install", run_in_background: true, isolation: "worktree" })
 # → agent_id: "agent-1"
-Agent({ subagent_type: "worker", prompt: "Implement Task 2: Recovery modes. [full text]...", description: "Task 2: recovery modes", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 2: Recovery modes. [full text]...", description: "Task 2: recovery modes", run_in_background: true, isolation: "worktree" })
 # → agent_id: "agent-2"
-Agent({ subagent_type: "worker", prompt: "Implement Task 3: Config parser. [full text]...", description: "Task 3: config parser", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Implement Task 3: Config parser. [full text]...", description: "Task 3: config parser", run_in_background: true, isolation: "worktree" })
 # → agent_id: "agent-3"
 
 [Live streaming: all 3 agents working simultaneously]
@@ -260,6 +275,9 @@ Agent({ subagent_type: "worker", prompt: "Implement Task 3: Config parser. [full
 get_subagent_result({ agent_id: "agent-1", wait: true })  # ✓
 get_subagent_result({ agent_id: "agent-2", wait: true })  # ✓
 get_subagent_result({ agent_id: "agent-3", wait: true })  # ✓
+
+[Inspect and integrate each returned worktree branch sequentially]
+[Run integration tests]
 
 [Dispatch parallel spec reviewers]
 Agent({ subagent_type: "reviewer", prompt: "Spec compliance for Task 1: [requirements + T1 report]", description: "Spec review: Task 1", run_in_background: true })
@@ -288,9 +306,11 @@ All ✅ — mark Tasks 1, 2, 3 complete in TodoWrite
 
 === Sequential: Task 4 (depends on Task 3) ===
 
-[Dispatch single implementer]
-Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + Task 3 output]", description: "Task 4: integration layer" })
-...
+[Dispatch single steerable implementer]
+Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + Task 3 output]", description: "Task 4: integration layer", run_in_background: true })
+# → agent_id: "agent-4"
+[Optionally steer if new information arrives]
+get_subagent_result({ agent_id: "agent-4", wait: true })
 [spec review → quality review → complete]
 
 === Sequential: Task 5 (depends on Task 4) ===
@@ -306,8 +326,8 @@ Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + Task 3 
 **vs. Manual execution:**
 - Subagents follow TDD naturally
 - Fresh context per task (no confusion)
-- Parallel-safe (subagents don't interfere)
-- Subagent can ask questions (before AND during work via steer_subagent)
+- Parallel-safe when writers use worktree isolation and returned branches are integrated sequentially
+- The controller can send new information to running background agents via `steer_subagent()`
 
 **vs. Executing Plans:**
 - Same session (no handoff)
@@ -345,7 +365,8 @@ Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + Task 3 
 - Start implementation on main/master branch without explicit user consent
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
-- **Dispatch parallel implementers on tasks that share files (causes merge conflicts)**
+- **Dispatch parallel implementers without `isolation: "worktree"`**
+- **Dispatch parallel implementers on tasks that share files (causes integration conflicts even with isolation)**
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
@@ -357,16 +378,17 @@ Agent({ subagent_type: "worker", prompt: "Implement Task 4: [full text + Task 3 
 
 **Parallel is SAFE for:**
 - Reviewers (read-only, never edit code)
-- Implementers on truly independent files
+- Implementers on truly independent files when every writer uses `isolation: "worktree"`
 
 **Parallel is UNSAFE for:**
-- Implementers touching the same files
+- Implementers sharing the parent worktree
+- Implementers touching the same files, even in isolated worktrees
 - Tasks where Task B needs Task A's output
 
-**If subagent asks questions:**
-- Answer clearly and completely via `steer_subagent()`
-- Provide additional context if needed
-- Don't rush them into implementation
+**If a subagent needs guidance:**
+- Use `steer_subagent()` only for a running background agent
+- If a completed agent reports `NEEDS_CONTEXT`, provide the missing context and re-dispatch
+- Never attempt to steer a blocking foreground call
 
 **If reviewer finds issues:**
 - Implementer (same subagent re-dispatched) fixes them

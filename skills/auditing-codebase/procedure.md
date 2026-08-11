@@ -176,11 +176,16 @@ In that case, set `aggregate_ranking = []` and continue to Step 5.
    successful auditor.
 4. For each successful auditor, dispatch a fresh subagent with that auditor's
    model and the interpolated peer-ranking prompt. Run them in parallel with
-   `run_in_background: true`.
-5. Parse each response by finding `FINAL RANKING:` and extracting the numbered
-   `auditor_<label>` lines. Discard a ranking if it omits any valid label or
-   includes an unknown one.
-6. Compute aggregate ranking: for each label, average its position across all
+   `run_in_background: true` and record each returned agent ID with its auditor
+   label.
+5. Wait for every peer-ranking agent ID with
+   `get_subagent_result({ agent_id: "<id>", wait: true })`. Associate each
+   collected response with the recorded auditor label. A failed or missing
+   result contributes no ranking and must be reported in the audit summary.
+6. Parse each collected response by finding `FINAL RANKING:` and extracting the
+   numbered `auditor_<label>` lines. Discard a ranking if it omits any valid
+   label or includes an unknown one.
+7. Compute aggregate ranking: for each label, average its position across all
    valid rankings (1-indexed). Lower = better. Build
    `{{AGGREGATE_RANKING_TABLE}}` (markdown table: Label | Average rank | Vote
    count).

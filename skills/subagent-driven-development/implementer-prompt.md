@@ -37,10 +37,14 @@ Agent({ subagent_type: "worker", ... }):
     1. Implement exactly what the task specifies
     2. Write tests (following TDD if task says to)
     3. Verify implementation works
-    4. Commit your work
+    4. Follow the execution mode supplied by the controller:
+       - **Parent worktree:** commit your work as the task requires.
+       - **Worktree isolation:** do not commit. Leave changes uncommitted so the
+         Tintinweb runtime can create and return the isolated branch on completion.
     5. Self-review (see below)
     6. Report back
 
+    Execution mode: [parent worktree | worktree isolation]
     Work from: [directory]
 
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
@@ -109,6 +113,7 @@ Agent({ subagent_type: "worker", ... }):
     - What you implemented (or what you attempted, if blocked)
     - What you tested and test results
     - Files changed
+    - Commit hash when using the parent worktree; otherwise note that the runtime will return the isolated branch
     - Self-review findings (if any)
     - Any issues or concerns
 

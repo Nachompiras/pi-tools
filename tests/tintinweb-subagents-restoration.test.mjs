@@ -27,6 +27,15 @@ function combined(paths) {
   return paths.map((path) => `\n--- ${path} ---\n${read(path)}`).join("\n");
 }
 
+function markdownSection(path, startHeading, endHeading) {
+  const document = read(path);
+  const start = document.indexOf(startHeading);
+  const end = document.indexOf(endHeading, start + startHeading.length);
+  assert.notEqual(start, -1, `${path} must contain ${startHeading}`);
+  assert.notEqual(end, -1, `${path} must contain ${endHeading}`);
+  return document.slice(start, end);
+}
+
 function assertTintinwebOnly(paths) {
   const resources = combined(paths);
   for (const pattern of [
@@ -123,6 +132,25 @@ test("subagent-driven development uses Tintinweb", () => {
   ]) {
     assert.match(resources, pattern);
   }
+
+  const skill = read("skills/subagent-driven-development/SKILL.md");
+  const isolatedWriterCalls = skill.match(
+    /Agent\(\{[^\n]*subagent_type: ["']worker["'][^\n]*run_in_background: true[^\n]*isolation: ["']worktree["'][^\n]*\}\)/g,
+  ) ?? [];
+  assert.ok(isolatedWriterCalls.length >= 3, "parallel writers must use worktree isolation");
+
+  const sequential = markdownSection(
+    "skills/subagent-driven-development/SKILL.md",
+    "### Sequential Dispatch Pattern",
+    "### Handling Mixed Results",
+  );
+  assert.match(sequential, /run_in_background: true/);
+  assert.match(sequential, /steer_subagent\s*\(/);
+  assert.match(sequential, /get_subagent_result\s*\(/);
+
+  const implementerPrompt = read("skills/subagent-driven-development/implementer-prompt.md");
+  assert.match(implementerPrompt, /worktree isolation[\s\S]*do not commit/i);
+  assert.match(implementerPrompt, /runtime[\s\S]*branch/i);
 });
 
 test("specialized workflows use Tintinweb", () => {
@@ -132,6 +160,14 @@ test("specialized workflows use Tintinweb", () => {
   assert.match(resources, /run_in_background/);
   assert.match(resources, /peer[- ]rank/i);
   assert.match(resources, /judge/i);
+
+  const peerRanking = markdownSection(
+    "skills/auditing-codebase/procedure.md",
+    "### Step 4 — Peer-ranking",
+    "### Step 5 — Judge consolidation",
+  );
+  assert.match(peerRanking, /record[^.\n]*agent ID/i);
+  assert.match(peerRanking, /get_subagent_result\s*\([^)]*wait:\s*true/);
 });
 
 test("README documents Tintinweb and preserves current features", () => {
