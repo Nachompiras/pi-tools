@@ -78,10 +78,12 @@ test("package selects Tintinweb and preserves current package contracts", () => 
   const manifest = readJson("package.json");
   const lockfile = readJson("package-lock.json");
 
-  assert.equal(manifest.dependencies?.["@tintinweb/pi-subagents"], "^0.5.2");
+  assert.equal(manifest.dependencies?.["@tintinweb/pi-subagents"], "^0.15.0");
   assert.equal(manifest.pi?.subagents, undefined);
-  assert.ok(lockfile.packages?.["node_modules/@tintinweb/pi-subagents"]);
+  const lockedRuntime = lockfile.packages?.["node_modules/@tintinweb/pi-subagents"];
+  assert.match(lockedRuntime?.version ?? "", /^0\.15\./);
   assert.equal(lockfile.packages?.["node_modules/pi-subagents"], undefined);
+  assert.equal(lockfile.packages?.["node_modules/@mariozechner/pi-coding-agent"], undefined);
 
   for (const peer of [
     "@earendil-works/pi-agent-core",
@@ -95,12 +97,26 @@ test("package selects Tintinweb and preserves current package contracts", () => 
   assert.equal(manifest.devDependencies?.tsx, "4.23.11");
 
   const runtimeManifest = readJson("node_modules/@tintinweb/pi-subagents/package.json");
+  assert.equal(runtimeManifest.version, lockedRuntime.version);
+  for (const peer of [
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+  ]) {
+    assert.equal(runtimeManifest.peerDependencies?.[peer], ">=0.80.0", peer);
+  }
+  assert.equal(runtimeManifest.dependencies?.["@mariozechner/pi-coding-agent"], undefined);
+
   const extensionPath = runtimeManifest.pi?.extensions?.[0]?.replace(/^\.\//, "");
   assert.ok(extensionPath, "Tintinweb must publish a Pi extension entrypoint");
   const runtimeSource = read(`node_modules/@tintinweb/pi-subagents/${extensionPath}`);
-  assert.match(runtimeSource, /name:\s*["']Agent["'][\s\S]*?prompt:\s*Type\.String[\s\S]*?subagent_type:\s*Type\.String[\s\S]*?run_in_background:\s*Type\.Optional[\s\S]*?isolation:\s*Type\.Optional/);
-  assert.match(runtimeSource, /name:\s*["']get_subagent_result["'][\s\S]*?agent_id:\s*Type\.String[\s\S]*?wait:\s*Type\.Optional/);
-  assert.match(runtimeSource, /name:\s*["']steer_subagent["'][\s\S]*?agent_id:\s*Type\.String[\s\S]*?message:\s*Type\.String/);
+  const runnerSource = read("node_modules/@tintinweb/pi-subagents/src/agent-runner.ts");
+  assert.match(runnerSource, /AGENT:\s*["']Agent["']/);
+  assert.match(runnerSource, /GET_RESULT:\s*["']get_subagent_result["']/);
+  assert.match(runnerSource, /STEER:\s*["']steer_subagent["']/);
+  assert.match(runtimeSource, /name:\s*SUBAGENT_TOOL_NAMES\.AGENT[\s\S]*?prompt:\s*Type\.String[\s\S]*?subagent_type:\s*Type\.String[\s\S]*?run_in_background:\s*Type\.Optional[\s\S]*?isolation:\s*Type\.Optional/);
+  assert.match(runtimeSource, /name:\s*SUBAGENT_TOOL_NAMES\.GET_RESULT[\s\S]*?agent_id:\s*Type\.String[\s\S]*?wait:\s*Type\.Optional/);
+  assert.match(runtimeSource, /name:\s*SUBAGENT_TOOL_NAMES\.STEER[\s\S]*?agent_id:\s*Type\.String[\s\S]*?message:\s*Type\.String/);
   assert.match(runtimeSource, /Type\.Literal\(["']worktree["']/);
 });
 
@@ -109,6 +125,7 @@ test("agents use Tintinweb frontmatter", () => {
     const yaml = frontmatter(path);
     assert.doesNotMatch(yaml, /(?:^|\n)name:/, path);
     assert.doesNotMatch(yaml, /(?:^|\n)systemPromptMode:/, path);
+    assert.doesNotMatch(yaml, /(?:^|[ ,])multi_grep(?:,|$)/, path);
   }
   assert.match(frontmatter("agents/worker.md"), /(?:^|\n)prompt_mode: append(?:\n|$)/);
 });
@@ -146,6 +163,8 @@ test("primary workflows use Tintinweb", () => {
       "each isolated writer prompt must require a runtime-returned branch",
     );
   }
+  assert.match(dispatchSkill, /fails loud/i);
+  assert.doesNotMatch(dispatchSkill, /0\.5\.2 falls back/i);
   assert.match(dispatchSkill, /integrate returned branches one at a time/i);
 });
 
@@ -182,7 +201,8 @@ test("subagent-driven development uses Tintinweb", () => {
   assert.match(implementerPrompt, /worktree isolation[\s\S]*do not commit/i);
   assert.match(implementerPrompt, /runtime[\s\S]*branch/i);
   assert.match(implementerPrompt, /isolation[^.\n]*fail[\s\S]*stop[\s\S]*without[^.\n]*edit/i);
-  assert.match(skill, /falls back[\s\S]*abort without edits/i);
+  assert.match(skill, /fails loud[\s\S]*abort without edits/i);
+  assert.match(skill, /frontmatter[\s\S]*takes precedence[\s\S]*Agent\(\)/i);
 
   const backgroundReviewerCalls = skill.match(
     /Agent\(\{[^\n]*subagent_type: ["']reviewer["'][^\n]*run_in_background: true[^\n]*\}\)/g,

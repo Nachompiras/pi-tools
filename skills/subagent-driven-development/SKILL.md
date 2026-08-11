@@ -124,7 +124,7 @@ digraph process {
 
 The `@tintinweb/pi-subagents` package provides `Agent()`, `get_subagent_result()`, and `steer_subagent()` tools. Use `run_in_background: true` with `isolation: "worktree"` for parallel writers. Read-only reviewers may share the parent worktree.
 
-Tintinweb falls back to the parent worktree when isolation setup fails. Every isolated implementer brief must require the worker to abort without edits if it receives that warning. Before integration, confirm every successful writer returned an isolated branch; treat a missing branch for a task that should change files as a failure.
+Tintinweb 0.15 fails loud and returns an error when worktree isolation setup fails; it does not fall back to the parent worktree. Every isolated implementer brief must still require the worker to abort without edits if isolation fails. Before integration, confirm every successful writer returned an isolated branch; treat a missing branch for a task that should change files as a failure.
 
 ### Assessing Independence
 
@@ -204,14 +204,15 @@ When some parallel tasks fail and others succeed:
 
 Models are configured per agent type. There are three ways to set a model, in order of precedence:
 
-1. **`model` parameter on Agent() call** — overrides everything for that specific dispatch:
+1. **Agent `.md` frontmatter** — set the `model:` field in the agent definition file (e.g., `agents/worker.md`). Agent configuration takes precedence over values supplied by `Agent()`.
+
+2. **`model` parameter on an `Agent()` call** — selects the model for that dispatch only when the agent definition leaves `model` unspecified:
    ```
    Agent({ subagent_type: "worker", prompt: "...", description: "...", model: "haiku" })
    ```
+   Both frontmatter and call parameters support fuzzy names (e.g., `"haiku"`, `"sonnet"`) or exact identifiers (e.g., `"anthropic/claude-sonnet-4-6"`).
 
-2. **Agent `.md` frontmatter** — set the `model:` field in the agent definition file (e.g., `agents/worker.md`). Applies to all dispatches of that agent type unless overridden by (1). Supports fuzzy names (e.g., `"haiku"`, `"sonnet"`) or exact identifiers (e.g., `"anthropic/claude-sonnet-4-6"`).
-
-3. **Inherit parent model** — if neither (1) nor (2) specifies a model, the subagent inherits the parent agent's model.
+3. **Inherit parent model** — if neither frontmatter nor the call specifies a model, the subagent inherits the parent agent's model.
 
 **Agent types:**
 - Custom agents defined in `agents/*.md` files: `worker`, `scout`, `reviewer`, `planner`
@@ -246,7 +247,7 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 **BLOCKED:** The implementer cannot complete the task. Assess the blocker:
 1. If it's a context problem, provide more context and re-dispatch
-2. If the task requires more reasoning, re-dispatch with a more capable model via the `model` parameter
+2. If the task requires more reasoning, re-dispatch with an agent definition that leaves `model` unspecified and pass a more capable `model`, or update the agent frontmatter
 3. If the task is too large, break it into smaller pieces
 4. If the plan itself is wrong, escalate to the human
 

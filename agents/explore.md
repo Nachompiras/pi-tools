@@ -1,6 +1,6 @@
 ---
 description: Fast codebase exploration agent (read-only)
-tools: read, grep, find, ls, multi_grep, bash
+tools: read, grep, find, ls, bash
 model: minimax-m2.7
 ---
 
