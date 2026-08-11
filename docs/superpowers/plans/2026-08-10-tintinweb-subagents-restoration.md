@@ -401,4 +401,3 @@ Expected: no staged or unstaged files. Review the command history and diff to co
 - Vision, Earendil, token-speed, council, and Discord removal are preserved.
 - The complete test suite and TypeScript validation pass.
 - No global Pi configuration was modified.
-
