@@ -34,18 +34,10 @@ This skill is _informed_ by the project's domain model. The domain language give
 
 Read the project's domain glossary and any ADRs in the area you're touching first.
 
-Then dispatch the package's read-only `explore` agent in a foreground workflow:
+Then dispatch an exploration agent to walk the codebase:
 
-```js
-subagent({
-  workflowScript: `
-    return runs.run("architecture-exploration", {
-      agent: "explore",
-      task: "Walk the codebase and identify architectural friction: shallow modules, tight coupling, poor testability, and lost locality. Return file evidence."
-    });
-  `,
-  async: false
-})
+```
+Agent({ subagent_type: "Explore", prompt: "Walk the codebase and note areas of architectural friction: shallow modules, tight coupling, poor testability.", description: "Explore codebase architecture" })
 ```
 
 Don't follow rigid heuristics — explore organically and note where you experience friction:
