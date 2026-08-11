@@ -124,6 +124,8 @@ digraph process {
 
 The `@tintinweb/pi-subagents` package provides `Agent()`, `get_subagent_result()`, and `steer_subagent()` tools. Use `run_in_background: true` with `isolation: "worktree"` for parallel writers. Read-only reviewers may share the parent worktree.
 
+Tintinweb falls back to the parent worktree when isolation setup fails. Every isolated implementer brief must require the worker to abort without edits if it receives that warning. Before integration, confirm every successful writer returned an isolated branch; treat a missing branch for a task that should change files as a failure.
+
 ### Assessing Independence
 
 A task is independent if:
@@ -366,6 +368,7 @@ get_subagent_result({ agent_id: "agent-4", wait: true })
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
 - **Dispatch parallel implementers without `isolation: "worktree"`**
+- **Continue a parallel writer after Tintinweb warns that worktree isolation failed**
 - **Dispatch parallel implementers on tasks that share files (causes integration conflicts even with isolation)**
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)

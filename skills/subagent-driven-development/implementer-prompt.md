@@ -23,6 +23,11 @@ Agent({ subagent_type: "worker", ... }):
 
     ## Before You Begin
 
+    **Isolation safety gate:** If worktree isolation fails or the runtime warns
+    that it is falling back to the main working directory, STOP immediately.
+    Report `BLOCKED` without making edits or commits. Parallel work must never
+    continue in the shared parent worktree.
+
     If you have questions about:
     - The requirements or acceptance criteria
     - The approach or implementation strategy

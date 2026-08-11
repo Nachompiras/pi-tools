@@ -151,6 +151,8 @@ test("subagent-driven development uses Tintinweb", () => {
   const implementerPrompt = read("skills/subagent-driven-development/implementer-prompt.md");
   assert.match(implementerPrompt, /worktree isolation[\s\S]*do not commit/i);
   assert.match(implementerPrompt, /runtime[\s\S]*branch/i);
+  assert.match(implementerPrompt, /isolation[^.\n]*fail[\s\S]*stop[\s\S]*without[^.\n]*edit/i);
+  assert.match(skill, /falls back[\s\S]*abort without edits/i);
 });
 
 test("specialized workflows use Tintinweb", () => {
