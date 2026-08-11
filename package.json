@@ -22,12 +22,10 @@
     ],
     "prompts": [
       "./prompts"
-    ],
-    "subagents": {
-      "agents": [
-        "./agents"
-      ]
-    }
+    ]
+  },
+  "dependencies": {
+    "@tintinweb/pi-subagents": "^0.5.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",

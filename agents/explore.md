@@ -1,5 +1,4 @@
 ---
-name: explore
 description: Fast codebase exploration agent (read-only)
 tools: read, grep, find, ls, multi_grep, bash
 model: minimax-m2.7

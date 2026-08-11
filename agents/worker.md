@@ -1,7 +1,6 @@
 ---
-name: worker
 description: General-purpose worker with full capabilities, isolated context
-systemPromptMode: append
+prompt_mode: append
 model: deepseek/deepseek-v4-pro
 ---
 
