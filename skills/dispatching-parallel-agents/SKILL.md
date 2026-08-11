@@ -5,200 +5,176 @@ description: Use when facing 2+ independent tasks that can be worked on without 
 
 # Dispatching Parallel Agents
 
-Delegate focused work through Nicobailon's `pi-subagents` extension.
+Delegate independent tasks to specialized subagents running concurrently, using the `@tintinweb/pi-subagents` extension and its `Agent()`, `get_subagent_result()`, and `steer_subagent()` tools.
 
-**Core principle:** Put independent children in one `runs.all(...)` workflow. Use `runs.run(...)` for one child or sequential stages. Every `workflowScript` is a JavaScript statement body and must explicitly `return` useful output.
+**Why parallel:** Independent tasks don't need to be sequential. Run them simultaneously, get results faster, keep each agent focused on a narrow scope.
+
+**Core principle:** Launch background agents with `Agent({ run_in_background: true })`, then collect results with `get_subagent_result()`. A persistent widget shows spinners, status icons, and live progress for all running agents.
 
 ## When to Use
 
-Use parallel children when:
+**Use when:**
+- 2+ tasks are clearly independent (different files, different subsystems)
+- No task needs output from another to start
+- No shared state between agents (no same-file edits)
+- You want live progress from all agents simultaneously
 
-- two or more tasks are independent;
-- each task has a clear file or research scope;
-- no task needs another task's result before starting;
-- concurrent writers use separate managed worktrees.
+**Don't use when:**
+- Tasks share files (causes conflicts — use `isolation: "worktree"` if needed)
+- Task B depends on Task A's output (use sequential foreground calls instead)
+- You need to understand full system state first
+- You're still debugging (explore root cause first, then parallelize fixes)
 
-Do not use parallel children when:
+## The Pattern
 
-- tasks edit the same files without worktree isolation;
-- a later task depends on an earlier result;
-- the root cause is still unknown;
-- one well-scoped child is sufficient.
+### 1. Assess Independence
 
-## Parallel Workflow
+Group tasks by file scope:
+- Task A: `src/auth/` only -> independent
+- Task B: `src/payments/` only -> independent
+- Task C: `src/config.ts` (shared) -> sequential dependency
 
-Launch one coordinated foreground workflow when the parent needs every result immediately:
+### 2. Dispatch Background Agents, Then Collect Results
 
-```js
-subagent({
-  workflowScript: `
-    const results = await runs.all([
-      {
-        key: "auth-tests",
-        agent: "worker",
-        task: "Fix the listed auth tests. Do not widen scope. Return changed files and commands run."
-      },
-      {
-        key: "payment-tests",
-        agent: "worker",
-        task: "Fix the listed payment tests. Do not widen scope. Return changed files and commands run."
-      }
-    ]);
-    return results.map(result => ({ key: result.key, output: result.output }));
-  `,
-  async: false
-})
+Launch all independent tasks as background agents, then wait for each result:
+
+```
+# Launch all agents in the background
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/auth.test.ts: [paste test names + errors]", description: "fix auth tests", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/payments.test.ts: [paste test names + errors]", description: "fix payment tests", run_in_background: true })
+Agent({ subagent_type: "worker", prompt: "Fix 3 failing tests in src/notifications.test.ts: [paste test names + errors]", description: "fix notification tests", run_in_background: true })
+
+# Collect results (use agent_id returned by each Agent() call)
+get_subagent_result({ agent_id: "<id-from-agent-1>", wait: true })
+get_subagent_result({ agent_id: "<id-from-agent-2>", wait: true })
+get_subagent_result({ agent_id: "<id-from-agent-3>", wait: true })
 ```
 
-Use stable, descriptive keys. A single `runs.all(...)` lets the runtime coordinate concurrency, failures, status, and output.
+The persistent widget shows spinners and status icons for all running agents. Results are collected as each agent finishes.
 
-## Sequential Workflow
+### 3. Sequential Pipelines (Foreground Agents)
 
-When later work depends on earlier output, keep the stages in one script:
+When tasks need to pass output forward, run agents sequentially in the foreground. Each call blocks and returns a result you feed into the next prompt:
 
-```js
-subagent({
-  workflowScript: `
-    const scan = await runs.run("auth-scan", {
-      agent: "scout",
-      task: "Find the authentication entry points, data flow, tests, and risks."
-    });
-    const plan = await runs.run("auth-plan", {
-      agent: "planner",
-      task: "Create an implementation plan from this scout report:\n\n" + scan.output
-    });
-    return runs.run("auth-implementation", {
-      agent: "worker",
-      task: "Implement and verify this approved plan:\n\n" + plan.output
-    });
-  `,
-  async: false
-})
+```
+# Step 1: Scout gathers context (foreground, blocks until done)
+result_1 = Agent({ subagent_type: "scout", prompt: "Find all authentication code and summarize", description: "auth recon" })
+
+# Step 2: Planner uses scout's output
+result_2 = Agent({ subagent_type: "planner", prompt: "Based on this recon: <result_1 text> — create an implementation plan", description: "auth plan" })
+
+# Step 3: Worker executes the plan
+Agent({ subagent_type: "worker", prompt: "Execute this plan: <result_2 text>", description: "auth implementation" })
 ```
 
-Pass prior `.output` explicitly. Do not assume a fresh child can see another child's transcript.
+Each foreground `Agent()` call returns its result directly. Pass the result text as context into the next prompt.
 
-## One Child
+### 4. Single Agent for One Task
 
-```js
-subagent({
-  workflowScript: `
-    return runs.run("queue-fix", {
-      agent: "worker",
-      task: "Fix the queue race condition, add a regression test, and report verification."
-    });
-  `,
-  async: false
-})
+```
+Agent({ subagent_type: "worker", prompt: "Fix the race condition in src/queue.ts", description: "fix queue race condition" })
 ```
 
-## Asynchronous Work
+### 5. Mid-Run Steering
 
-Use asynchronous execution only when useful work can continue in the parent:
+If a running agent goes off-track, redirect it without aborting:
 
-```js
-subagent({
-  workflowScript: `
-    return runs.run("long-audit", {
-      agent: "reviewer",
-      task: "Audit the requested module and return findings with file and line evidence."
-    });
-  `,
-  async: true
-})
+```
+steer_subagent({ agent_id: "<id>", message: "Stop refactoring — focus only on the failing test. The error is in line 42." })
 ```
 
-Retain the returned workflow `id`. Collect it before claiming completion:
+### 6. Worktree Isolation
 
-```js
-subagent_wait({ id: "<workflow-id>" })
+When parallel tasks might touch overlapping files, use worktree isolation:
+
+```
+Agent({ subagent_type: "worker", prompt: "Refactor auth module", description: "auth refactor", isolation: "worktree", run_in_background: true })
 ```
 
-Inspect without blocking:
+## Writing Focused Agent Tasks
 
-```js
-subagent({ action: "status", id: "<workflow-id>" })
+Good parallel tasks are:
+
+1. **Scoped** — one file or subsystem, not "fix everything"
+2. **Self-contained** — all context needed to understand the problem
+3. **Specific about output** — what should the agent return?
+
+```markdown
+Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
+
+1. "should abort tool with partial output" - expects 'interrupted at' in message
+2. "should handle mixed completed and aborted tools" - fast tool aborted instead of completed
+3. "should properly track pendingToolCount" - expects 3 results but gets 0
+
+These are timing/race condition issues. Your task:
+1. Read the test file and understand what each test verifies
+2. Identify root cause — timing or actual bugs?
+3. Fix by replacing arbitrary timeouts with event-based waiting
+4. Do NOT just increase timeouts
+
+Return: Summary of root cause and what you fixed.
 ```
-
-Steer a live asynchronous run when new information changes its task:
-
-```js
-subagent({
-  action: "steer",
-  id: "<workflow-id>",
-  message: "Use TOML rather than YAML; the contract is in src/config.toml.",
-  mode: "steer"
-})
-```
-
-`mode: "follow_up"` queues guidance for the next turn boundary. `mode: "auto"` chooses immediate or queued delivery based on child state.
-
-## Worktree Isolation
-
-Parallel writers need isolated worktrees:
-
-```js
-subagent({
-  workflowScript: `
-    const results = await runs.all([
-      { key: "api", agent: "worker", task: "Implement the API slice.", worktree: true },
-      { key: "ui", agent: "worker", task: "Implement the UI slice.", worktree: true }
-    ]);
-    return results.map(result => ({ key: result.key, artifacts: result.artifactPaths }));
-  `,
-  async: false
-})
-```
-
-Return the handoff artifacts so the parent can inspect and apply each patch. Read-only children normally do not need worktrees. Prefer one writer when changes cannot be cleanly separated.
-
-## Writing Focused Tasks
-
-A good child task is:
-
-1. **Scoped** — names one subsystem, file set, or question.
-2. **Self-contained** — includes requirements and known evidence.
-3. **Constrained** — states what must not change.
-4. **Verifiable** — names tests or evidence expected.
-5. **Output-specific** — requests changed files, commands, findings, or risks.
-
-Do not write “fix everything” or “review this.” Include failing test names, errors, file boundaries, and acceptance criteria.
 
 ## Available Agents
 
-### Builtins from `pi-subagents`
+### Built-in Types
 
-| Agent | Purpose |
-|-------|---------|
-| `scout` | Fast local codebase reconnaissance |
-| `researcher` | Web and documentation research; requires `pi-web-access` |
-| `worker` | Implementation and validation |
-| `reviewer` | Independent review and small fixes |
-| `oracle` | Advisory second opinion for risky decisions |
-| `delegate` | General delegation close to parent behavior |
+These are always available, no setup needed:
 
-### Agents provided by this package
+| Type | Purpose | Tools |
+|------|---------|-------|
+| `general-purpose` | Full-capability agent, mirrors parent's tool access | all parent tools |
+| `Explore` | Lightweight read-only exploration (haiku model) | read, grep, find, ls |
+| `Plan` | Read-only planning and analysis | read, grep, find, ls |
 
-| Agent | Purpose |
-|-------|---------|
-| `explore` | Read-only codebase exploration |
-| `planner` | Read-only implementation planning |
-| `scout` | Compressed local reconnaissance |
-| `worker` | Implementation with full tools |
-| `reviewer` | Read-only quality and security review |
+### Custom Agent Types
 
-Package, user, and project definitions can override builtins with the same name. Use `subagent({ action: "list" })` to inspect the effective catalogue.
+These require `.md` definition files installed by the user (in `.pi/agents/` or user-level agents directory). They are **not** available unless set up:
 
-## Child Questions
+| Type | Purpose | Tools |
+|------|---------|-------|
+| `worker` | General-purpose implementation | all default |
+| `scout` | Fast codebase recon, returns compressed context | read, grep, find, ls, bash |
+| `planner` | Creates implementation plans | read, grep, find, ls |
+| `reviewer` | Code review (read-only) | read, grep, find, ls, bash |
 
-For work that may need a decision, tell the child to use `contact_supervisor`. Reply from the parent with `subagent_supervisor({ action: "reply", replyTo, message })`. Use parent-initiated steering for corrections, not as a substitute for clear initial requirements.
+If you use a custom type that isn't installed, the agent will fail. Fall back to `general-purpose` if unsure.
+
+## Output and Monitoring
+
+The `@tintinweb/pi-subagents` extension provides a persistent widget showing all agent activity:
+
+- **Spinner** for running agents with current tool call info
+- **Status icons** (checkmark/cross) for completed/failed agents
+- Live updates as agents make progress
+
+Use `get_subagent_result({ agent_id: "<id>", wait: true })` to block until a specific agent finishes and retrieve its full output.
+
+## Concurrency
+
+- Default: 4 agents run concurrently
+- Configurable via `/agents` -> Settings in the pi TUI
+- Split larger batches if you exceed the limit: launch first batch, collect results, then launch next batch
 
 ## Common Mistakes
 
-- **Multiple model-level launches for one batch:** use one `runs.all(...)` workflow.
-- **Missing `return`:** the script completes without a useful aggregate result.
-- **Parallel edits in one workspace:** use per-child `worktree: true` or serialize.
-- **Lost async ID:** retain it and call `subagent_wait`.
-- **Passing only a child summary to reviewers:** include the original requirements and repository scope.
-- **Assuming child context is shared:** pass prior output or required files explicitly.
-- **Hard limits on writers:** bound the task and runtime rather than preventing necessary verification.
+**X Parallel tasks that edit the same file** -> merge conflicts, corrupted output
+**OK Verify file scope is disjoint before dispatching, or use `isolation: "worktree"`**
+
+**X Too broad:** "Fix all the tests" -> agent gets lost
+**OK Specific:** "Fix auth.test.ts" -> focused scope
+
+**X No context:** "Fix the race condition" -> agent doesn't know where
+**OK Context:** Paste the error messages and test names
+
+**X No constraints:** Agent might refactor everything
+**OK Constraints:** "Do NOT change production code" or "Fix tests only"
+
+**X Vague output:** "Fix it" -> you don't know what changed
+**OK Specific:** "Return summary of root cause and changes"
+
+**X Forgetting to collect results:** Launching background agents but never calling `get_subagent_result()`
+**OK Always collect:** Call `get_subagent_result({ agent_id: "...", wait: true })` for each background agent
+
+**X Using custom agent types without setup:** `worker`, `scout`, etc. need `.md` files installed
+**OK Fall back to `general-purpose`** if custom agents aren't configured

@@ -1,16 +1,10 @@
 ---
-description: Implement, independently review, and apply review feedback
+description: Worker implements, reviewer reviews, worker applies feedback
 ---
+Execute this workflow using three sequential Agent calls:
 
-Create one foreground `subagent({ workflowScript, async: false })` workflow for this request:
+1. Use Agent({ subagent_type: "worker", prompt: "Implement: $@", description: "Implement: $@" }) to implement the task
+2. Use Agent({ subagent_type: "reviewer", prompt: "Review this implementation:\n\n[paste worker result]", description: "Review implementation" }) to review the work
+3. Use Agent({ subagent_type: "worker", prompt: "Apply this review feedback:\n\n[paste reviewer result]", description: "Apply review feedback" }) to apply the feedback
 
-$@
-
-Inside the script:
-
-1. Await `runs.run("implement", ...)` with agent `worker`. Include the full request and require tests plus exact changed-file evidence.
-2. Await `runs.run("review", ...)` with a fresh `reviewer`. Include the original request, repository scope, and worker output; require inspection of the actual diff.
-3. If the review reports Critical or Important issues, await `runs.run("fix", ...)` with agent `worker`. Include the original request and exact review findings, then require rerun verification. Otherwise retain the original implementation result.
-4. Explicitly return implementation, review, and optional fix outputs.
-
-Inspect the final diff yourself. Do not claim approval merely because the workflow completed.
+Run each agent in foreground (sequentially). Pass the full result of each step as context to the next.
