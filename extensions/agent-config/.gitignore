@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tmp
+*.tmp.*
+*.bak
+*.backup
+*.swp
+*~
+.DS_Store

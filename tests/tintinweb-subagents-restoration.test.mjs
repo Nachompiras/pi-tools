@@ -303,6 +303,38 @@ test("Nicobailon migration is historical", () => {
   assert.match(todo, /2026-08-10-tintinweb-subagents-restoration-design\.md/);
 });
 
+test("agent-config extension is present and integrable", () => {
+  const manifest = readJson("package.json");
+
+  // Extension files exist.
+  assert.equal(existsSync(join(root, "extensions/agent-config/index.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/src/workflow.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/src/discovery.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/test/handler.test.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/test/smoke.test.ts")), true);
+
+  // Entrypoint registers /agent-config.
+  const entrypoint = read("extensions/agent-config/index.ts");
+  assert.match(entrypoint, /agent[- ]?config/i);
+
+  // Root package declares required deps.
+  assert.equal(manifest.dependencies?.["yaml"], "^2.6.1");
+  assert.ok(manifest.devDependencies?.["vitest"], "vitest must be in devDependencies");
+  assert.ok(manifest.devDependencies?.["@types/node"], "@types/node must be in devDependencies");
+
+  // Root test script runs agent-config tests.
+  assert.match(manifest.scripts?.["test"] ?? "", /test:agent-config/);
+  assert.ok(manifest.scripts?.["test:agent-config"], "test:agent-config script must exist");
+  assert.ok(manifest.scripts?.["typecheck:agent-config"], "typecheck:agent-config script must exist");
+
+  // Vitest config exists for the extension.
+  assert.equal(existsSync(join(root, "extensions/agent-config/vitest.config.ts")), true);
+
+  // Discovery is aligned with @tintinweb/pi-subagents 0.15.x built-in.
+  const discoverySource = read("extensions/agent-config/src/discovery.ts");
+  assert.match(discoverySource, /DEFAULT_AGENTS|builtin/i);
+});
+
 test("removed runtimes stay removed", () => {
   const manifest = readJson("package.json");
   assert.equal(existsSync(join(root, "extensions/discord")), false);
