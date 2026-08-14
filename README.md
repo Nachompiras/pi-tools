@@ -49,8 +49,6 @@ cp agents/*.md .pi/agents/
 
 | Agent | Purpose | Model |
 |-------|---------|-------|
-| Agent | Purpose | Model |
-|-------|---------|-------|
 | `explore` | Fast codebase exploration (read-only) | openrouter/minimax/minimax-m2.7 |
 | `worker` | General-purpose implementation with full tools | deepseek/deepseek-v4-pro |
 | `reviewer` | Code review, quality and security analysis (read-only) | openrouter/qwen/qwen3.7-plus |

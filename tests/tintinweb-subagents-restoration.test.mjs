@@ -293,6 +293,12 @@ test("README documents Tintinweb and preserves current features", () => {
   assert.match(readme, /quick-worker/);
   assert.match(readme, /deep-worker/);
   assert.match(readme, /deep-reviewer/);
+  // Exactly one agent table header
+  assert.equal(
+    (readme.match(/\| Agent \| Purpose \| Model \|/g) || []).length,
+    1,
+    "README must have exactly one agent table header",
+  );
   // agent-config extension documented
   assert.match(readme, /agent-config/);
   assert.match(readme, /\/agent-config/);
