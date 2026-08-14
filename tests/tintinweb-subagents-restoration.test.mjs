@@ -154,6 +154,7 @@ test("agents use Tintinweb frontmatter", () => {
     } else if (path === "agents/reviewer.md") {
       assert.match(yaml, /thinking: low/, path);
       assert.match(yaml, /max_turns: 6/, path);
+      assert.match(yaml, /(?:^|\n)model: openrouter\/qwen\/qwen3\.7-plus(?:$|\n)/, `${path} model must be openrouter/qwen/qwen3.7-plus`);
     } else if (path === "agents/scout.md") {
       assert.match(yaml, /thinking: low/, path);
       assert.match(yaml, /max_turns: 6/, path);
@@ -172,6 +173,7 @@ test("agents use Tintinweb frontmatter", () => {
     } else if (path === "agents/deep-reviewer.md") {
       assert.match(yaml, /thinking: high/, path);
       assert.match(yaml, /max_turns: 8/, path);
+      assert.match(yaml, /(?:^|\n)model: openrouter\/openai\/gpt-5\.6-sol(?:$|\n)/, `${path} model must be openrouter/openai/gpt-5.6-sol`);
     }
   }
 });
@@ -296,6 +298,19 @@ test("README documents Tintinweb and preserves current features", () => {
   assert.match(readme, /\/agent-config/);
   // Current Tintinweb compatibility (0.15.x)
   assert.match(readme, /@tintinweb\/pi-subagents.*0\.15/);
+
+  // README table models match actual agent frontmatter
+  function readmeAgentModel(readme, agentName, expectedModel) {
+    const pattern = new RegExp(`\\x60${agentName}\\x60\\s*\\|[^|]*\\|\\s*([^|]+?)\\s*\\|`);
+    const m = readme.match(pattern);
+    assert.ok(m, `README must contain agent row for ${agentName}`);
+    const actual = m[1].trim();
+    assert.equal(actual, expectedModel, `README ${agentName} model must be ${expectedModel}, got ${actual}`);
+  }
+  readmeAgentModel(readme, "reviewer", "openrouter/qwen/qwen3.7-plus");
+  readmeAgentModel(readme, "deep-reviewer", "openrouter/openai/gpt-5.6-sol");
+  readmeAgentModel(readme, "explore", "openrouter/minimax/minimax-m2.7");
+  readmeAgentModel(readme, "scout", "openrouter/minimax/minimax-m2.7");
 });
 
 test("Nicobailon migration is historical", () => {
@@ -312,6 +327,20 @@ test("Nicobailon migration is historical", () => {
   const todo = read("tasks/todo.md");
   assert.match(todo, /^# Historical:/);
   assert.match(todo, /2026-08-10-tintinweb-subagents-restoration-design\.md/);
+});
+
+test("agent-config README states 0.15.x compatibility", () => {
+  const readme = read("extensions/agent-config/README.md");
+  assert.match(
+    readme,
+    /@tintinweb\/pi-subagents.*0\.15\.x/,
+    "agent-config README must mention @tintinweb/pi-subagents 0.15.x compatibility",
+  );
+  assert.match(
+    readme,
+    /\^0\.15\.0/,
+    "agent-config README must reference root dependency ^0.15.0",
+  );
 });
 
 test("agent-config extension is present and integrable", () => {

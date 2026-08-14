@@ -49,14 +49,16 @@ cp agents/*.md .pi/agents/
 
 | Agent | Purpose | Model |
 |-------|---------|-------|
-| `explore` | Fast codebase exploration (read-only) | minimax-m2.7 |
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| `explore` | Fast codebase exploration (read-only) | openrouter/minimax/minimax-m2.7 |
 | `worker` | General-purpose implementation with full tools | deepseek/deepseek-v4-pro |
-| `reviewer` | Code review, quality and security analysis (read-only) | claude-sonnet-4-6 |
+| `reviewer` | Code review, quality and security analysis (read-only) | openrouter/qwen/qwen3.7-plus |
 | `planner` | Implementation planning from context and requirements (read-only) | inherits configured default |
-| `scout` | Fast codebase recon for handoff to other agents (read-only) | minimax-m2.7 |
+| `scout` | Fast codebase recon for handoff to other agents (read-only) | openrouter/minimax/minimax-m2.7 |
 | `quick-worker` | Cheap mechanical implementation for well-specified changes | deepseek/deepseek-v4-pro |
 | `deep-worker` | Escalated complex integration work | openrouter/openai/gpt-5.6-sol |
-| `deep-reviewer` | Deep code review and security analysis (read-only) | inherits configured default |
+| `deep-reviewer` | Deep code review and security analysis (read-only) | openrouter/openai/gpt-5.6-sol |
 
 These custom definitions work alongside Tintinweb's built-in `general-purpose`, `Explore`, and `Plan` subagent types.
 

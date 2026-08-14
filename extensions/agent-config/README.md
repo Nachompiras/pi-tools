@@ -10,6 +10,8 @@ This extension is included in the `pi-tools` package and is auto-discovered when
 pi install git:github.com/Nachompiras/pi-tools
 ```
 
+**Package compatibility**: This extension integrates with `@tintinweb/pi-subagents` 0.15.x, which is declared as a root dependency (`^0.15.0`). It discovers built-in agents from that package's exported definitions and relies on the same source-precedence model.
+
 Restart Pi or run `/reload` to activate the command.
 
 ## Commands
