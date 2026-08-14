@@ -160,13 +160,15 @@ test("agents use Tintinweb frontmatter", () => {
     } else if (path === "agents/worker.md") {
       assert.match(yaml, /thinking: medium/, path);
       assert.match(yaml, /max_turns: 10/, path);
-      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
     } else if (path === "agents/quick-worker.md") {
       assert.match(yaml, /thinking: low/, path);
       assert.match(yaml, /max_turns: 8/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
     } else if (path === "agents/deep-worker.md") {
       assert.match(yaml, /thinking: high/, path);
       assert.match(yaml, /max_turns: 14/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
     } else if (path === "agents/deep-reviewer.md") {
       assert.match(yaml, /thinking: high/, path);
       assert.match(yaml, /max_turns: 8/, path);
@@ -277,7 +279,7 @@ test("specialized workflows use Tintinweb", () => {
 
 test("README documents Tintinweb and preserves current features", () => {
   const readme = read("README.md");
-  assert.match(readme, /pi install npm:@tintinweb\/pi-subagents(?:\s|`)/);
+  assert.match(readme, /pi install npm:@tintinweb\/pi-subagents(?:@[^\s`]+)?(?:\s|`)/);
   assert.match(readme, /cp agents\/\*\.md ~\/\.pi\/agent\/agents\//);
   assert.match(readme, /\.pi\/agents/);
   assert.doesNotMatch(readme, /npm:pi-subagents/);
@@ -285,6 +287,15 @@ test("README documents Tintinweb and preserves current features", () => {
   assert.match(readme, /npm:@getpipher\/vision@0\.5\.2/);
   assert.match(readme, /token-speed/);
   assert.match(readme, /council/);
+  // All eight agents documented
+  assert.match(readme, /quick-worker/);
+  assert.match(readme, /deep-worker/);
+  assert.match(readme, /deep-reviewer/);
+  // agent-config extension documented
+  assert.match(readme, /agent-config/);
+  assert.match(readme, /\/agent-config/);
+  // Current Tintinweb compatibility (0.15.x)
+  assert.match(readme, /@tintinweb\/pi-subagents.*0\.15/);
 });
 
 test("Nicobailon migration is historical", () => {

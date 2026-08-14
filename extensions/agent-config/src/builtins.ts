@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { stringify as stringifyYaml } from "yaml";
+import { validateAgentName } from "./discovery.js";
+import type { AgentSource, BuiltinLoadResult } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection for testing
@@ -14,8 +16,7 @@ import { stringify as stringifyYaml } from "yaml";
  * simulate "package not found" conditions without needing to uninstall the real
  * @tintinweb/pi-subagents dependency.
  *
- * The setter is re-assignable so vitest can restore the original after each
- * test via `vi.mockRestore()` on the owning module.
+ * Call `setLoadBuiltinDefaultsOverride(null)` to restore the real implementation.
  */
 let loadBuiltinDefaultsOverride: ((
   packageDir: string,
@@ -30,8 +31,6 @@ export function setLoadBuiltinDefaultsOverride(
 ): void {
   loadBuiltinDefaultsOverride = fn;
 }
-import { validateAgentName } from "./discovery.js";
-import type { AgentSource, BuiltinLoadResult } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Minimal type matching AgentConfig fields used by serialization

@@ -25,7 +25,7 @@ pi update
 Install the subagent runtime and the pinned image workflow package:
 
 ```bash
-pi install npm:@tintinweb/pi-subagents
+pi install npm:@tintinweb/pi-subagents@^0.15.0
 pi install npm:@getpipher/vision@0.5.2
 ```
 
@@ -54,6 +54,9 @@ cp agents/*.md .pi/agents/
 | `reviewer` | Code review, quality and security analysis (read-only) | claude-sonnet-4-6 |
 | `planner` | Implementation planning from context and requirements (read-only) | inherits configured default |
 | `scout` | Fast codebase recon for handoff to other agents (read-only) | minimax-m2.7 |
+| `quick-worker` | Cheap mechanical implementation for well-specified changes | deepseek/deepseek-v4-pro |
+| `deep-worker` | Escalated complex integration work | openrouter/openai/gpt-5.6-sol |
+| `deep-reviewer` | Deep code review and security analysis (read-only) | inherits configured default |
 
 These custom definitions work alongside Tintinweb's built-in `general-purpose`, `Explore`, and `Plan` subagent types.
 
@@ -65,6 +68,7 @@ These custom definitions work alongside Tintinweb's built-in `general-purpose`, 
 |-----------|-------------|
 | **plan-mode** | Read-only exploration mode with plan step tracking |
 | **council** | Multi-model review council — sends a spec/plan/code file to multiple LLMs via OpenRouter, runs a 3-stage pipeline (independent review → anonymous peer ranking → chairman synthesis) |
+| **agent-config** | Configure agent model, thinking level, and max turns without editing markdown files; validates names, creates timestamped backups, and uses atomic writes with `0600` permissions on POSIX |
 | **token-speed** | Preserves Pi's built-in footer and adds live TPS, session-average TPS, and average TTFT |
 
 #### Council Setup
@@ -95,6 +99,11 @@ Create `~/.pi/council.json` with your OpenRouter API key and the models you want
 
 - `/council` — Interactive: choose review type (Spec/Plan/Code), enter file path, optional instructions. Runs the full 3-stage pipeline and shows a compact synthesis + rankings.
 - `/council results` — Show full details of the last council run (all individual reviews, peer evaluations, chairman synthesis).
+
+#### Agent Config
+
+- `/agent-config` — Open an agent selector with source and precedence labels.
+- `/agent-config <agent-name>` — Jump directly to the dashboard for the named agent.
 
 ### Skills
 

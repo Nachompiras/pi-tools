@@ -2,34 +2,15 @@
 
 Interactive Pi extension for configuring a subagent's model, thinking level, and maximum turns without manually editing agent Markdown files.
 
-## Prerequisites
-
-- **Pi** 0.82.1 (tested version; the `pi` CLI and extension API)
-- **@tintinweb/pi-subagents** 0.14.3 (tested version; optional runtime integration for built-in agent discovery — file-defined agents work without it)
-
 ## Installation
 
-Extensions placed under `~/.pi/agent/extensions/` are auto-discovered — no manual path configuration is needed.
-
-### New install (clone or copy)
+This extension is included in the `pi-tools` package and is auto-discovered when installed via:
 
 ```bash
-git clone <repo-url> ~/.pi/agent/extensions/agent-config
-cd ~/.pi/agent/extensions/agent-config && npm install
+pi install git:github.com/Nachompiras/pi-tools
 ```
 
-Or copy an already-built checkout:
-
-```bash
-mkdir -p ~/.pi/agent/extensions/agent-config
-cp -r index.ts package.json package-lock.json node_modules src ~/.pi/agent/extensions/agent-config/
-```
-
-Then run `/reload` inside Pi or restart Pi to activate the command.
-
-### Development (project already at final path)
-
-If the checkout already lives at `~/.pi/agent/extensions/agent-config/`, only `npm install` and a `/reload`/restart are needed.
+Restart Pi or run `/reload` to activate the command.
 
 ## Commands
 
@@ -153,9 +134,6 @@ These can be considered after the core workflow is validated.
 ## Manual testing
 
 > **Status**: Automated checks (527 tests, 11 test files, typecheck, git diff --check) pass.
-> **Live TUI validation**: 51 manual checks are defined but **NOT RUN** — every live row is intentionally `NOT RUN` until an interactive Pi session is executed.
-
-A detailed manual test checklist is available in [`docs/manual-test.md`](docs/manual-test.md).
 
 ## Development
 
