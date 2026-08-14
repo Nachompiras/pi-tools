@@ -121,13 +121,57 @@ test("package selects Tintinweb and preserves current package contracts", () => 
 });
 
 test("agents use Tintinweb frontmatter", () => {
-  for (const path of filesUnder("agents", ".md")) {
+  const agentFiles = filesUnder("agents", ".md").filter((p) => !p.endsWith(".bak"));
+  const expected = [
+    "explore.md",
+    "planner.md",
+    "reviewer.md",
+    "scout.md",
+    "worker.md",
+    "quick-worker.md",
+    "deep-worker.md",
+    "deep-reviewer.md",
+  ];
+  assert.equal(agentFiles.length, 8, `expected 8 agent files, got ${agentFiles.length}: ${agentFiles.join(", ")}`);
+  for (const name of expected) {
+    assert.ok(agentFiles.includes(`agents/${name}`), `missing agent: ${name}`);
+  }
+  for (const path of agentFiles) {
     const yaml = frontmatter(path);
     assert.doesNotMatch(yaml, /(?:^|\n)name:/, path);
     assert.doesNotMatch(yaml, /(?:^|\n)systemPromptMode:/, path);
     assert.doesNotMatch(yaml, /(?:^|[ ,])multi_grep(?:,|$)/, path);
+    // Must have required bounded fields
+    assert.match(yaml, /(?:^|\n)thinking: /, `${path} must have thinking:`);
+    assert.match(yaml, /(?:^|\n)max_turns: /, `${path} must have max_turns:`);
+    // Verify expected thinking/max_turns for each agent
+    if (path === "agents/explore.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 4/, path);
+    } else if (path === "agents/planner.md") {
+      assert.match(yaml, /thinking: medium/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+    } else if (path === "agents/reviewer.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 6/, path);
+    } else if (path === "agents/scout.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 6/, path);
+    } else if (path === "agents/worker.md") {
+      assert.match(yaml, /thinking: medium/, path);
+      assert.match(yaml, /max_turns: 10/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/);
+    } else if (path === "agents/quick-worker.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+    } else if (path === "agents/deep-worker.md") {
+      assert.match(yaml, /thinking: high/, path);
+      assert.match(yaml, /max_turns: 14/, path);
+    } else if (path === "agents/deep-reviewer.md") {
+      assert.match(yaml, /thinking: high/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+    }
   }
-  assert.match(frontmatter("agents/worker.md"), /(?:^|\n)prompt_mode: append(?:\n|$)/);
 });
 
 test("primary workflows use Tintinweb", () => {
