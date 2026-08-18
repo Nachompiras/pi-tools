@@ -121,13 +121,61 @@ test("package selects Tintinweb and preserves current package contracts", () => 
 });
 
 test("agents use Tintinweb frontmatter", () => {
-  for (const path of filesUnder("agents", ".md")) {
+  const agentFiles = filesUnder("agents", ".md").filter((p) => !p.endsWith(".bak"));
+  const expected = [
+    "explore.md",
+    "planner.md",
+    "reviewer.md",
+    "scout.md",
+    "worker.md",
+    "quick-worker.md",
+    "deep-worker.md",
+    "deep-reviewer.md",
+  ];
+  assert.equal(agentFiles.length, 8, `expected 8 agent files, got ${agentFiles.length}: ${agentFiles.join(", ")}`);
+  for (const name of expected) {
+    assert.ok(agentFiles.includes(`agents/${name}`), `missing agent: ${name}`);
+  }
+  for (const path of agentFiles) {
     const yaml = frontmatter(path);
     assert.doesNotMatch(yaml, /(?:^|\n)name:/, path);
     assert.doesNotMatch(yaml, /(?:^|\n)systemPromptMode:/, path);
     assert.doesNotMatch(yaml, /(?:^|[ ,])multi_grep(?:,|$)/, path);
+    // Must have required bounded fields
+    assert.match(yaml, /(?:^|\n)thinking: /, `${path} must have thinking:`);
+    assert.match(yaml, /(?:^|\n)max_turns: /, `${path} must have max_turns:`);
+    // Verify expected thinking/max_turns for each agent
+    if (path === "agents/explore.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 4/, path);
+    } else if (path === "agents/planner.md") {
+      assert.match(yaml, /thinking: medium/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+    } else if (path === "agents/reviewer.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 6/, path);
+      assert.match(yaml, /(?:^|\n)model: openrouter\/qwen\/qwen3\.7-plus(?:$|\n)/, `${path} model must be openrouter/qwen/qwen3.7-plus`);
+    } else if (path === "agents/scout.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 6/, path);
+    } else if (path === "agents/worker.md") {
+      assert.match(yaml, /thinking: medium/, path);
+      assert.match(yaml, /max_turns: 10/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
+    } else if (path === "agents/quick-worker.md") {
+      assert.match(yaml, /thinking: low/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
+    } else if (path === "agents/deep-worker.md") {
+      assert.match(yaml, /thinking: high/, path);
+      assert.match(yaml, /max_turns: 14/, path);
+      assert.match(yaml, /(?:^|\n)prompt_mode: append(?:\n|$)/, path);
+    } else if (path === "agents/deep-reviewer.md") {
+      assert.match(yaml, /thinking: high/, path);
+      assert.match(yaml, /max_turns: 8/, path);
+      assert.match(yaml, /(?:^|\n)model: openrouter\/openai\/gpt-5\.6-sol(?:$|\n)/, `${path} model must be openrouter/openai/gpt-5.6-sol`);
+    }
   }
-  assert.match(frontmatter("agents/worker.md"), /(?:^|\n)prompt_mode: append(?:\n|$)/);
 });
 
 test("primary workflows use Tintinweb", () => {
@@ -233,7 +281,7 @@ test("specialized workflows use Tintinweb", () => {
 
 test("README documents Tintinweb and preserves current features", () => {
   const readme = read("README.md");
-  assert.match(readme, /pi install npm:@tintinweb\/pi-subagents(?:\s|`)/);
+  assert.match(readme, /pi install npm:@tintinweb\/pi-subagents(?:@[^\s`]+)?(?:\s|`)/);
   assert.match(readme, /cp agents\/\*\.md ~\/\.pi\/agent\/agents\//);
   assert.match(readme, /\.pi\/agents/);
   assert.doesNotMatch(readme, /npm:pi-subagents/);
@@ -241,6 +289,34 @@ test("README documents Tintinweb and preserves current features", () => {
   assert.match(readme, /npm:@getpipher\/vision@0\.5\.2/);
   assert.match(readme, /token-speed/);
   assert.match(readme, /council/);
+  // All eight agents documented
+  assert.match(readme, /quick-worker/);
+  assert.match(readme, /deep-worker/);
+  assert.match(readme, /deep-reviewer/);
+  // Exactly one agent table header
+  assert.equal(
+    (readme.match(/\| Agent \| Purpose \| Model \|/g) || []).length,
+    1,
+    "README must have exactly one agent table header",
+  );
+  // agent-config extension documented
+  assert.match(readme, /agent-config/);
+  assert.match(readme, /\/agent-config/);
+  // Current Tintinweb compatibility (0.15.x)
+  assert.match(readme, /@tintinweb\/pi-subagents.*0\.15/);
+
+  // README table models match actual agent frontmatter
+  function readmeAgentModel(readme, agentName, expectedModel) {
+    const pattern = new RegExp(`\\x60${agentName}\\x60\\s*\\|[^|]*\\|\\s*([^|]+?)\\s*\\|`);
+    const m = readme.match(pattern);
+    assert.ok(m, `README must contain agent row for ${agentName}`);
+    const actual = m[1].trim();
+    assert.equal(actual, expectedModel, `README ${agentName} model must be ${expectedModel}, got ${actual}`);
+  }
+  readmeAgentModel(readme, "reviewer", "openrouter/qwen/qwen3.7-plus");
+  readmeAgentModel(readme, "deep-reviewer", "openrouter/openai/gpt-5.6-sol");
+  readmeAgentModel(readme, "explore", "openrouter/minimax/minimax-m2.7");
+  readmeAgentModel(readme, "scout", "openrouter/minimax/minimax-m2.7");
 });
 
 test("Nicobailon migration is historical", () => {
@@ -257,6 +333,52 @@ test("Nicobailon migration is historical", () => {
   const todo = read("tasks/todo.md");
   assert.match(todo, /^# Historical:/);
   assert.match(todo, /2026-08-10-tintinweb-subagents-restoration-design\.md/);
+});
+
+test("agent-config README states 0.15.x compatibility", () => {
+  const readme = read("extensions/agent-config/README.md");
+  assert.match(
+    readme,
+    /@tintinweb\/pi-subagents.*0\.15\.x/,
+    "agent-config README must mention @tintinweb/pi-subagents 0.15.x compatibility",
+  );
+  assert.match(
+    readme,
+    /\^0\.15\.0/,
+    "agent-config README must reference root dependency ^0.15.0",
+  );
+});
+
+test("agent-config extension is present and integrable", () => {
+  const manifest = readJson("package.json");
+
+  // Extension files exist.
+  assert.equal(existsSync(join(root, "extensions/agent-config/index.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/src/workflow.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/src/discovery.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/test/handler.test.ts")), true);
+  assert.equal(existsSync(join(root, "extensions/agent-config/test/smoke.test.ts")), true);
+
+  // Entrypoint registers /agent-config.
+  const entrypoint = read("extensions/agent-config/index.ts");
+  assert.match(entrypoint, /agent[- ]?config/i);
+
+  // Root package declares required deps.
+  assert.equal(manifest.dependencies?.["yaml"], "^2.6.1");
+  assert.ok(manifest.devDependencies?.["vitest"], "vitest must be in devDependencies");
+  assert.ok(manifest.devDependencies?.["@types/node"], "@types/node must be in devDependencies");
+
+  // Root test script runs agent-config tests.
+  assert.match(manifest.scripts?.["test"] ?? "", /test:agent-config/);
+  assert.ok(manifest.scripts?.["test:agent-config"], "test:agent-config script must exist");
+  assert.ok(manifest.scripts?.["typecheck:agent-config"], "typecheck:agent-config script must exist");
+
+  // Vitest config exists for the extension.
+  assert.equal(existsSync(join(root, "extensions/agent-config/vitest.config.ts")), true);
+
+  // Discovery is aligned with @tintinweb/pi-subagents 0.15.x built-in.
+  const discoverySource = read("extensions/agent-config/src/discovery.ts");
+  assert.match(discoverySource, /DEFAULT_AGENTS|builtin/i);
 });
 
 test("removed runtimes stay removed", () => {
