@@ -1,7 +1,7 @@
 ---
 description: Focused routine implementation worker
 prompt_mode: append
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-v4-flash-0731
 thinking: medium
 max_turns: 10
 ---

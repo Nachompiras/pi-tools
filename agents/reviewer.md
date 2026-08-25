@@ -1,7 +1,7 @@
 ---
 description: Fast focused correctness reviewer
 tools: read, grep, find, ls, bash
-model: openrouter/qwen/qwen3.7-plus
+model: openrouter/qwen/qwen3.8-max
 thinking: low
 max_turns: 6
 ---

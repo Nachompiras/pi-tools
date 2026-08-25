@@ -1,7 +1,7 @@
 ---
 description: Cheap mechanical implementation worker
 prompt_mode: append
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-v4-pro-0813
 thinking: low
 max_turns: 8
 ---

@@ -1,7 +1,7 @@
 ---
 description: Quick targeted code lookup
 tools: read, grep, find, ls, bash
-model: openrouter/minimax/minimax-m2.7
+model: openrouter/minimax/minimax-m3
 thinking: low
 max_turns: 4
 ---
