@@ -154,17 +154,42 @@ its pod kanban.
 Workers do TDD + focused tests, commit small, hand off. Architect integrates
 accepted commits. Expensive tests go to the Test Pod, never run locally.
 
-### 6. Expensive tests — execute once per identity (any agent → Test Pod)
-Before any expensive command, check the dedup registry:
+### 6. Tests — evidence travels in the handoff (default), Test Pod is the exception
+The "double test" problem is a **communication** problem, not an infrastructure
+one: reviewers re-run because they can't trust what was already tested. Fix it by
+making test evidence a **reusable, auditable part of the handoff** — not a
+separate pod for every check.
+
+**Default — evidence in the handoff (use for the common case):**
+The worker runs the test in its own worktree and records reusable evidence in its
+handoff (see `roles-and-protocol.md` §Handoffs):
+```text
+TESTS RUN: <command> @ <sha> → PASS|FAIL <summary> · evidence: <path>
+```
+The reviewer reads it and applies the **identity rule**: if the SHA it is
+reviewing equals the evidence's SHA (and same command/env/config), it does NOT
+re-run — it trusts the evidence and spends its attention on what a test can't
+see (correctness, security, design, edge cases). It re-runs only when the code
+changed (a different identity). This alone eliminates the worker↔reviewer double
+test, with zero pod overhead.
+
+**Optional dedup registry** — when several agents may run the same expensive
+command, back the handoff evidence with the shared registry so nobody repeats it:
 ```sh
 scripts/fleet.sh test-check <wave-id> <sha> "<command>" "<env>" "<config>"
-#   HIT   → reuse recorded evidence, DO NOT rerun
-#   INFLIGHT → subscribe, DO NOT launch a duplicate
-#   MISS  → run it, then record:
+#   HIT → reuse recorded evidence, DO NOT rerun   INFLIGHT → subscribe   MISS → run + record:
 scripts/fleet.sh test-record <wave-id> <sha> "<command>" "<env>" "<config>" PASSED|FAILED <evidence-path> [worker]
 ```
 Identity = `SHA + COMMAND + ENV + CONFIG`. A failed run is valid evidence — never
-retry silently. Rules: `roles-and-protocol.md` §Test Pod.
+retry silently. The registry works with OR without a Test Pod.
+
+**When to escalate to a Test Pod** (the exception, not the rule): only when the
+expensive command is **long enough that its spin-up amortizes** (e.g. a 20-min
+regression) OR there is **real contention on a single shared resource** that must
+be serialized through one executor (a single staging DB, one non-parallelizable
+simulator/device). For a 1–2 minute build/test, the Test Pod's session +
+detached-worktree ceremony costs more than it saves — keep evidence in the
+handoff. Full rules: `roles-and-protocol.md` §Test Pod.
 
 ### 7. Integrate the wave (master)
 Before integrating, verify every expected pod handoff actually arrived — a fleet

@@ -12,7 +12,8 @@ between sessions (see `runtime-adapters.md`).
 - Delegate implementation and review without making the master a message router.
 - Expose idle capacity so the master can dispatch more approved work.
 - Track each agent's state, current task, and last completed task.
-- Centralize expensive tests/builds/suites in a transverse Test Pod.
+- Make test evidence a reusable part of the handoff so nobody double-tests;
+  centralize in a transverse Test Pod only the long or resource-contended tests.
 - Execute each expensive command exactly once per identity; share the evidence.
 - Reset completed contexts instead of carrying unrelated history forward.
 - Make git commits, test evidence, and structured handoffs the source of truth.
@@ -70,20 +71,29 @@ the master serializes on them.
 - Assign exclusive file ownership; are the sole writer of the pod kanban.
 - Record every agent/task transition; notify the Supervisor the board changed.
 - Integrate accepted worker commits into the pod integration branch.
-- Submit the integrated SHA + Test Pod evidence to the reviewer.
+- Submit the integrated SHA + test evidence (handoff `TESTS RUN` lines, or Test Pod keys) to the reviewer.
 - Report to the master only when approved, blocked, or unable to preserve independence.
 - May integrate/investigate but must not absorb routine worker implementation to bypass delegation.
 
 ### Development Workers
 - Receive one self-contained atomic task; write only in the assigned worktree + file scope.
 - Follow TDD for features and bug fixes; run focused, fast verification.
-- Send expensive verification to the Test Architect instead of running it locally.
+- Run the pod's tests in your own worktree and put reusable evidence in the
+  handoff (`TESTS RUN: <command> @ <sha> → result · evidence: <path>`). Escalate a
+  test to the Test Architect ONLY when it is long enough to amortize the pod
+  spin-up or contends on a single shared resource; otherwise evidence-in-handoff
+  is the default and the reviewer reuses it by the identity rule.
 - Self-review the diff; make a small, attributable commit; send a structured handoff.
 - Keep context only through the implementation + correction loop for that task.
 
 ### Reviewers
 - Read-only during initial review; review the integrated pod SHA, not disconnected intentions.
 - Check correctness, security, regressions, integration, and existing test evidence.
+- **Identity rule (do not double-test):** if the SHA you are reviewing equals the
+  SHA in the handoff's `TESTS RUN` evidence (same command/env/config), DO NOT
+  re-run that test — trust the evidence and spend review time on what tests can't
+  see (correctness, security, design, edge cases). Re-run only when the code
+  changed (a different identity) or the command you need was never run.
 - May request additional verification from the Test Architect; never rerun an existing identity.
 - Return `APPROVED` or actionable findings (severity, file/line, impact, expected correction).
 - Retain context for fixes + re-review of the same change; start fresh after verdict.
@@ -195,8 +205,23 @@ state changes, infer availability from silence, or treat WAITING_*/BLOCKED as id
 
 ## Test Pod: dedup and scaling
 
-- **Ownership:** pods own TDD + fast focused tests; Test Pod owns expensive commands
-  (full suites, integration/regression, expensive builds, integration/reviewer/wave gates).
+**When to use a Test Pod at all.** The default is evidence-in-handoff (see
+§Handoffs): the worker runs the test in its worktree and the reviewer reuses the
+evidence by the identity rule — no pod, no ceremony. Stand up a Test Pod ONLY
+when one of these is true, because its session + detached-worktree spin-up is
+real overhead:
+- the command is **long enough to amortize** the spin-up (e.g. a multi-minute
+  regression or full-suite run invoked many times), or
+- there is **real contention on a single shared resource** that must be
+  serialized through one executor (one staging DB, one non-parallelizable
+  simulator/device, a rate-limited external service).
+For a 1–2 minute build/test with per-run isolation (separate DerivedData, temp
+DB, etc.), keep evidence in the handoff — the pod would cost more than it saves.
+
+- **Ownership:** pods own TDD + fast focused tests, and by default own their own
+  expensive-test evidence in the handoff. A Test Pod owns only the tests that meet
+  the criteria above (long or resource-contended: full regression, shared-resource
+  integration, the wave-final gate).
 - **Identity:** `TARGET SHA + COMMAND + ENVIRONMENT/DESTINATION + CONFIGURATION`.
   Reusable only when all four match. A wave-final test on the integrated SHA is a
   distinct identity from a pod test, not a duplicate.
@@ -231,9 +256,15 @@ sequentially; remove worktrees only after commits/handoffs/evidence are durable.
 
 No agent resets until its architect updated the kanban and its durable handoff exists:
 ```text
-SCOPE: / BRANCH/WORKTREE: / COMMITS: / FILES CHANGED: / FOCUSED TESTS RUN:
-TEST POD EVIDENCE: / RESULT: / REVIEW VERDICT: / OPEN ISSUES: / RECOMMENDED NEXT STEP:
+SCOPE: / BRANCH/WORKTREE: / COMMITS: / FILES CHANGED:
+TESTS RUN: <command> @ <sha> → PASS|FAIL <summary> · evidence: <path>   (one line per test run)
+RESULT: / REVIEW VERDICT: / OPEN ISSUES: / RECOMMENDED NEXT STEP:
 ```
+The `TESTS RUN` line is the reusable evidence: the exact command, the exact SHA
+it ran against, the outcome, and a path to the log/artifact. It is what lets the
+reviewer skip re-running (identity rule below) and is the default channel for
+test results — a Test Pod is only involved for long or resource-contended tests.
+If a Test Pod did run it, cite its execution key here instead of a local path.
 Pod → master handoff adds:
 ```text
 POD: / OBJECTIVE: / BASE SHA: / FINAL SHA: / COMMITS INCLUDED: / FOCUSED TEST EVIDENCE:
@@ -272,11 +303,12 @@ Task boundary is the primary reset signal; context % is secondary.
 
 ## Quality gates
 
-Pod cannot report complete without: focused tests per worker task; exact Test Pod
-evidence for required expensive gates; self-reviewed diffs; independent reviewer
-verdict; no uncommitted changes in worker/integration worktrees; exact SHAs +
-focused commands + execution keys in the handoff; a current kanban; no duplicate
-expensive execution for an existing key.
+Pod cannot report complete without: focused tests per worker task; reusable test
+evidence in the handoff (`TESTS RUN: command @ sha → result · evidence: path`, or a
+Test Pod execution key when one was used); self-reviewed diffs; independent
+reviewer verdict; no uncommitted changes in worker/integration worktrees; exact
+SHAs + commands + evidence paths/keys in the handoff; a current kanban; no
+duplicate execution for an existing identity.
 
 Wave cannot integrate to `main` without: every required pod handoff, verified by
 count against the expected pods (`fleet.sh check` — never integrate partial);
