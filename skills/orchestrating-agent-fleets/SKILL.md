@@ -52,7 +52,7 @@ its own subagents. The two compose.
 
 ```text
 Master Orchestrator ── owns plan, git integration, approvals, capacity
-├── Supervisor (advisory) ── reads boards, reports idle capacity + stale state
+├── Monitor (advisory) ── deterministic watchdog: overdue check-ins, context pressure, idle capacity
 ├── Pod A: Architect → Workers + Reviewer   (independent subsystem)
 ├── Pod B: Architect → Workers + Reviewer   (independent subsystem)
 └── Test Pod: Test Architect → Test Workers  (transverse expensive verification)
@@ -226,7 +226,7 @@ is the primary reset signal, % is secondary.
 ## Common Mistakes
 
 - **Master becomes a router.** It should receive consolidated pod handoffs and
-  Supervisor alerts, not relay every worker message. Route status *inside* the pod.
+  Monitor alerts, not relay every worker message. Route status *inside* the pod.
 - **Parallel pods that share files.** Worktrees prevent index races, not logical
   merge conflicts. Run `overlap` first; serialize anything that overlaps.
 - **False independence (hidden resource edge).** Two pods whose prompts never
@@ -246,6 +246,6 @@ is the primary reset signal, % is secondary.
 ## Files
 
 - `roles-and-protocol.md` — full role responsibilities, contracts, kanban schemas,
-  supervisor protocol, test dedup rules, git model, quality gates, failure handling
+  monitor protocol, test dedup rules, git model, quality gates, failure handling
 - `runtime-adapters.md` — map the protocol onto Herdr+Pi, ORCA, or tmux+CLIs
 - `scripts/fleet.sh` — mechanical git + coordination automation (runtime-agnostic)

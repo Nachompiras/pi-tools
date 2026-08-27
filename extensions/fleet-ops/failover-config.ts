@@ -10,7 +10,7 @@
  * the extension offers to switch that session to the role's `backup`.
  */
 
-export type FleetRole = "master" | "supervisor" | "architect" | "worker" | "reviewer" | "test-worker";
+export type FleetRole = "master" | "monitor" | "architect" | "worker" | "reviewer" | "test-worker";
 
 export interface RoleModels {
 	primary: string; // "provider/modelId" (id may itself contain slashes, e.g. openrouter/deepseek/...)
@@ -28,8 +28,11 @@ export interface OnProviderError {
 export interface FleetModelsConfig {
 	roles: Partial<Record<FleetRole, RoleModels>>;
 	onProviderError: OnProviderError;
-	/** Supervisor watchdog interval in seconds. 0 disables the timer. Default 60. */
+	/** Monitor watchdog interval in seconds. 0 disables the timer. Default 60. */
 	watchdogSeconds: number;
+	/** Context-usage alert thresholds (percent). Monitor warns/flags at these. */
+	contextWarnPercent: number; // default 70
+	contextHighPercent: number; // default 85
 }
 
 export interface ModelRef {
@@ -48,12 +51,12 @@ export const DEFAULT_ON_PROVIDER_ERROR: OnProviderError = {
  * Shipped defaults. Model IDs match the pi catalogue naming used elsewhere in
  * this repo; adjust to your own `pi --list-models` identifiers as needed.
  * Backups reflect the team's stated choices (worker→glm-5.3-flash,
- * reviewer→opus-4.8, supervisor→minimax-v2.5-pro).
+ * reviewer→opus-4.8, monitor→minimax-v2.5-pro).
  */
 export const DEFAULT_CONFIG: FleetModelsConfig = {
 	roles: {
 		master: { primary: "openai-codex/gpt-5.6-sol", thinking: "xhigh" },
-		supervisor: { primary: "openrouter/minimax/minimax-v2.5-pro", backup: "openrouter/z-ai/glm-5.3-flash" },
+		monitor: { primary: "openrouter/minimax/minimax-v2.5-pro", backup: "openrouter/z-ai/glm-5.3-flash" },
 		architect: {
 			primary: "openai-codex/gpt-5.6-sol",
 			backup: "openrouter/qwen/qwen3.7-plus",
@@ -76,11 +79,13 @@ export const DEFAULT_CONFIG: FleetModelsConfig = {
 	},
 	onProviderError: DEFAULT_ON_PROVIDER_ERROR,
 	watchdogSeconds: 60,
+	contextWarnPercent: 70,
+	contextHighPercent: 85,
 };
 
 const VALID_ROLES: readonly FleetRole[] = [
 	"master",
-	"supervisor",
+	"monitor",
 	"architect",
 	"worker",
 	"reviewer",
@@ -109,12 +114,20 @@ export function mergeConfig(raw: unknown): FleetModelsConfig {
 		roles: { ...DEFAULT_CONFIG.roles },
 		onProviderError: { ...DEFAULT_ON_PROVIDER_ERROR },
 		watchdogSeconds: DEFAULT_CONFIG.watchdogSeconds,
+		contextWarnPercent: DEFAULT_CONFIG.contextWarnPercent,
+		contextHighPercent: DEFAULT_CONFIG.contextHighPercent,
 	};
 	if (!raw || typeof raw !== "object") return out;
 	const obj = raw as Record<string, unknown>;
 
 	if (typeof obj.watchdogSeconds === "number" && obj.watchdogSeconds >= 0) {
 		out.watchdogSeconds = obj.watchdogSeconds;
+	}
+	if (typeof obj.contextWarnPercent === "number" && obj.contextWarnPercent > 0) {
+		out.contextWarnPercent = obj.contextWarnPercent;
+	}
+	if (typeof obj.contextHighPercent === "number" && obj.contextHighPercent > 0) {
+		out.contextHighPercent = obj.contextHighPercent;
 	}
 
 	if (obj.roles && typeof obj.roles === "object") {

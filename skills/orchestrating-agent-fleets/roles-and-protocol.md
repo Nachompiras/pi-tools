@@ -55,21 +55,30 @@ the master serializes on them.
 - Does cross-pod integration review, final sequencing, and requests only wave-final gates.
 - Never treats a peer message as user approval.
 
-### Supervisor (advisory only)
+### Monitor (advisory only)
+The monitor watches team **health** on a deterministic clock so nobody has to
+remember to look. It runs the watchdog itself (its whole job); the master is
+never tied up doing this.
 - Reads every pod kanban; correlates with approved, unassigned work.
-- Receives board-changed notices from architects; audits only entries whose
-  `NEXT_CHECK_IN` expired. Queries the owning **architect**, never the worker.
-- Reports idle workers (last task, last SHA, idle duration, compatible same-pod tasks).
+- Runs a mechanical timer (every `watchdogSeconds`, default 60). Each tick it:
+  - **Check-ins:** flags entries whose `NEXT_CHECK_IN` expired — the silent-stall
+    signal the push side can't catch. Queries the owning **architect**, never the worker.
+  - **Context:** reads each live agent's context usage (from its session file via
+    `herdr agent list`) and flags anyone over the warn/high thresholds so the
+    master can ask for a checkpoint + reset **before** the agent degrades.
+  - **Idle capacity:** reports idle workers (last task, last SHA, idle duration,
+    compatible same-pod tasks).
+- Deduplicates: only surfaces a signal when the picture changes, never spam.
 - Marks a board view `STALE` and escalates when it cannot refresh an expired entry.
 - Never assigns tasks, moves workers, creates agents, changes ownership, or approves.
-- A Supervisor recommendation is evidence for a master decision, not an instruction.
+- A Monitor recommendation is evidence for a master decision, not an instruction.
 
 ### Development Architects
 - Receive one approved plan slice; decompose into independent atomic worker tasks.
 - Do NOT invoke skills or write competing specs/plans.
 - Define task acceptance criteria, focused test commands, and expensive Test Pod gates.
 - Assign exclusive file ownership; are the sole writer of the pod kanban.
-- Record every agent/task transition; notify the Supervisor the board changed.
+- Record every agent/task transition; notify the Monitor the board changed.
 - Integrate accepted worker commits into the pod integration branch.
 - Submit the integrated SHA + test evidence (handoff `TESTS RUN` lines, or Test Pod keys) to the reviewer.
 - Report to the master only when approved, blocked, or unable to preserve independence.
@@ -170,7 +179,7 @@ SUBSCRIBERS NOTIFIED:
 
 Both live under `.orchestration/wave-<id>/` (git-ignored, created by `fleet.sh`).
 Architects are the sole writers of their pod board; the Test Architect of the test
-board. Supervisor + master are readers. Workers/reviewers report transitions via
+board. Monitor + master are readers. Workers/reviewers report transitions via
 messages, not board edits.
 
 ### Pod board — agent states / task flow
@@ -186,12 +195,12 @@ block, review, test-wait, completion, reset, and disconnection boundaries.
 QUEUED | RUNNING | PASSED | FAILED | CANCELLED | STALE
 ```
 
-## Supervisor protocol (hybrid push + audit)
+## Monitor protocol (hybrid push + audit)
 
 1. Architect updates its board on any agent/task state change.
-2. Architect sends the Supervisor a short board-changed notice.
-3. Supervisor reads the board (not a full transcript).
-4. Supervisor audits an entry only after its `NEXT_CHECK_IN` expired.
+2. Architect sends the Monitor a short board-changed notice.
+3. Monitor reads the board (not a full transcript).
+4. Monitor audits an entry only after its `NEXT_CHECK_IN` expired.
 5. Expired dev entry → queried through its architect; expired test entry → through Test Architect.
 6. If state can't be refreshed → mark view `STALE`, escalate to master.
 
@@ -282,7 +291,7 @@ referenced by path, never pasted through messages.
 
 Task boundary is the primary reset signal; context % is secondary.
 - **Master:** retains full initiative; checkpoint + compact ~60%; reset only when done/handed off.
-- **Supervisor:** retains one wave; boards are the state source; compact ~60–70% after boards reflect observations.
+- **Monitor:** retains one wave; boards are the state source; compact ~60–70% after boards reflect observations.
 - **Architects:** retain one wave; checkpoint + compact ~60–70%; reset after pod handoff accepted or when reassigned to an unrelated subsystem (even at low %).
 - **Workers:** fresh per atomic task; reset after commit + handoff accepted + board updated.
 - **Reviewers:** fresh per change; retain through fixes + re-review; reset after verdict.
@@ -291,8 +300,8 @@ Task boundary is the primary reset signal; context % is secondary.
 
 ## Communication boundaries
 
-- Master ↔ architects, Test Architect, Supervisor.
-- Supervisor ↔ master + architects only.
+- Master ↔ architects, Test Architect, Monitor.
+- Monitor ↔ master + architects only.
 - Architects ↔ their own workers + reviewer.
 - Any agent → Test Architect (test requests). Only the Test Architect directs Test Workers.
 - Test results → requester + requester's architect + central registry.
@@ -333,8 +342,8 @@ coverage — it does not re-run the same identity to look diligent.
   before its own handoff rather than forwarding everything.
 - **Blocked approval/question:** escalate architect → master → user if authority needed.
 - **Worker stalled:** redirect once; else request partial handoff, update board, reset, reassign in-pod.
-- **Idle worker:** Supervisor reports same-pod candidates; master issues the assignment.
-- **Expired check-in:** Supervisor queries the architect; marks view STALE if unrefreshable.
+- **Idle worker:** Monitor reports same-pod candidates; master issues the assignment.
+- **Expired check-in:** Monitor queries the architect; marks view STALE if unrefreshable.
 - **Architect unavailable:** preserve its board + handoffs; escalate recovery to master.
 - **Overlapping files:** pause one lane, serialize.
 - **Pre-existing failing focused tests:** document with evidence; never weaken/skip silently.

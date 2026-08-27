@@ -279,7 +279,7 @@ cmd_check() {
 }
 
 # Scan every pod board and print only entries whose NEXT_CHECK_IN is in the past.
-# Deterministic; the supervisor session runs this on a timer. exit 3 if any overdue.
+# Deterministic; the monitor session runs this on a timer. exit 3 if any overdue.
 # Only ISO-8601 timestamps are compared (HH:MM is ambiguous without a date here);
 # the TypeScript watchdog in the extension handles HH:MM. This CLI is a convenience.
 cmd_watch() {

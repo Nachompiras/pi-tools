@@ -39,6 +39,14 @@ import {
 } from "./failover-decision.js";
 import { buildTeamTree, type LiveAgent } from "./team.js";
 import { formatWatchdogMessage, runWatchdog, watchdogSignature } from "./watchdog.js";
+import {
+	computeReading,
+	type ContextReading,
+	type ContextThresholds,
+	contextSignature,
+	formatContextMessage,
+	parseSessionUsage,
+} from "./context-usage.js";
 import { exec as execCb } from "node:child_process";
 import { promisify } from "node:util";
 import type { PodBoard } from "./parse.js";
@@ -60,8 +68,14 @@ async function loadPodBoards(root: string, waveId: string): Promise<PodBoard[]> 
 	return pods;
 }
 
-/** Query `herdr agent list` for live agent state. Empty on non-herdr runtimes. */
-async function herdrAgents(): Promise<LiveAgent[]> {
+/** A live agent plus its pi session .jsonl path, from `herdr agent list`. */
+interface LiveAgentFull extends LiveAgent {
+	sessionPath?: string;
+	modelId?: string;
+}
+
+/** Query `herdr agent list`. Empty on non-herdr runtimes. */
+async function herdrAgentsFull(): Promise<LiveAgentFull[]> {
 	if (process.env.HERDR_ENV !== "1") return [];
 	try {
 		const { stdout } = await exec("herdr agent list", { timeout: 5000 });
@@ -69,15 +83,43 @@ async function herdrAgents(): Promise<LiveAgent[]> {
 		const agents = parsed?.result?.agents ?? parsed?.agents ?? [];
 		if (!Array.isArray(agents)) return [];
 		return agents
-			.map((a: Record<string, unknown>) => ({
-				name: String(a.name ?? ""),
-				status: String(a.agent_status ?? a.status ?? ""),
-				paneId: a.pane_id ? String(a.pane_id) : undefined,
-			}))
-			.filter((a: LiveAgent) => a.name.length > 0);
+			.map((a: Record<string, unknown>) => {
+				const sess = a.agent_session as Record<string, unknown> | undefined;
+				return {
+					name: String(a.name ?? ""),
+					status: String(a.agent_status ?? a.status ?? ""),
+					paneId: a.pane_id ? String(a.pane_id) : undefined,
+					sessionPath: sess && typeof sess.value === "string" ? sess.value : undefined,
+				};
+			})
+			.filter((a: LiveAgentFull) => a.name.length > 0);
 	} catch {
 		return [];
 	}
+}
+
+async function herdrAgents(): Promise<LiveAgent[]> {
+	return herdrAgentsFull();
+}
+
+/**
+ * Read every live agent's context usage from its session .jsonl.
+ * `windowFor` resolves a model id to its context window (via modelRegistry).
+ */
+async function gatherContextReadings(
+	windowFor: (modelId: string | undefined) => number,
+): Promise<ContextReading[]> {
+	const agents = await herdrAgentsFull();
+	const readings: ContextReading[] = [];
+	for (const a of agents) {
+		if (!a.name || !a.sessionPath) continue;
+		const jsonl = await readIfExists(a.sessionPath);
+		if (jsonl === null) continue;
+		const usage = parseSessionUsage(jsonl);
+		const reading = computeReading(a.name, usage, windowFor(usage?.modelId));
+		if (reading) readings.push(reading);
+	}
+	return readings;
 }
 
 async function pathExists(p: string): Promise<boolean> {
@@ -166,7 +208,7 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 	let switchedThisRun = false;
 
 	pi.registerFlag("fleet-role", {
-		description: "This session's fleet role (master|supervisor|architect|worker|reviewer|test-worker)",
+		description: "This session's fleet role (master|monitor|architect|worker|reviewer|test-worker)",
 		type: "string",
 	});
 
@@ -361,9 +403,9 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 		const dir = join(ctx.cwd, ORCH_DIR, `wave-${waveId}`);
 		const testBoard = await readIfExists(join(dir, "test-pod-kanban.md"));
 		const maxTW = testBoard?.match(/MAX_TEST_WORKERS:\s*(\d+)/)?.[1];
-		// Best-effort: identify master/supervisor/test workers from live herdr names.
+		// Best-effort: identify master/monitor/test workers from live herdr names.
 		const master = live.find((a) => /master/i.test(a.name))?.name ?? process.env.FLEET_MASTER;
-		const supervisor = live.find((a) => /supervisor/i.test(a.name))?.name;
+		const monitor = live.find((a) => /monitor|supervisor/i.test(a.name))?.name;
 		const testArchitect = live.find((a) => /test[_-]?arch/i.test(a.name))?.name;
 		const testWorkers = live.filter((a) => /test[_-]?worker/i.test(a.name)).map((a) => a.name);
 
@@ -371,7 +413,7 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 			waveId,
 			pods,
 			master,
-			supervisor,
+			monitor,
 			testArchitect,
 			testWorkers,
 			maxTestWorkers: maxTW,
@@ -398,45 +440,75 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 		handler: handleEquipo,
 	});
 
-	// ---- supervisor watchdog (deterministic clock, only in the supervisor session) ----
+	// ---- monitor watchdog (deterministic clock, only in the monitor session) ----
 	let watchdogTimer: ReturnType<typeof setInterval> | undefined;
 	let lastWatchdogSig = "";
 
-	async function runWatchdogOnce(cwd: string): Promise<string> {
-		const waves = await listWaves(cwd);
+	/** Resolve a "provider/modelId" to its context window via the model registry. */
+	function windowResolver(ctx: ExtensionContext): (modelId: string | undefined) => number {
+		return (modelId) => {
+			if (modelId) {
+				const ref = parseModelRef(modelId);
+				if (ref) {
+					const m = ctx.modelRegistry.find(ref.provider, ref.id) as { contextWindow?: number } | undefined;
+					if (m?.contextWindow) return m.contextWindow;
+				}
+			}
+			// fall back to the current session's model window, else a safe default
+			const cur = ctx.model as { contextWindow?: number } | undefined;
+			return cur?.contextWindow ?? 200000;
+		};
+	}
+
+	function thresholds(): ContextThresholds {
+		return { warn: config.contextWarnPercent, high: config.contextHighPercent };
+	}
+
+	async function runWatchdogOnce(ctx: ExtensionContext): Promise<string> {
+		const waves = await listWaves(ctx.cwd);
 		if (waves.length === 0) return "";
 		const waveId = waves[waves.length - 1];
-		const pods = await loadPodBoards(cwd, waveId);
+		const pods = await loadPodBoards(ctx.cwd, waveId);
 		if (pods.length === 0) return "";
 		const result = runWatchdog(pods, Date.now());
-		const sig = watchdogSignature(result);
-		if (sig === lastWatchdogSig) return ""; // dedup: don't re-announce an unchanged overdue set
+		const readings = await gatherContextReadings(windowResolver(ctx));
+		const th = thresholds();
+		// dedup across BOTH signals: only nudge when the combined picture changed
+		const sig = `${watchdogSignature(result)}|${contextSignature(readings, th)}`;
+		if (sig === lastWatchdogSig) return "";
 		lastWatchdogSig = sig;
-		return formatWatchdogMessage(result);
+		const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th)].filter(Boolean);
+		return parts.join("\n\n");
 	}
 
 	pi.registerCommand("watchdog", {
-		description: "Forzar un chequeo de NEXT_CHECK_IN vencidos (supervisor)",
+		description: "Forzar un chequeo de NEXT_CHECK_IN vencidos + contexto (monitor)",
 		handler: async (args, ctx) => {
 			const waveId = await resolveWave(args, ctx);
 			if (!waveId) return;
 			const pods = await loadPodBoards(ctx.cwd, waveId);
 			const result = runWatchdog(pods, Date.now());
-			const msg = formatWatchdogMessage(result);
-			ctx.ui.notify(msg || `⏱ Watchdog: todo al día en wave ${waveId} (${result.scannedPods} pods).`, msg ? "warning" : "info");
+			const readings = await gatherContextReadings(windowResolver(ctx));
+			const th = thresholds();
+			const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th)].filter(Boolean);
+			const msg = parts.join("\n\n");
+			ctx.ui.notify(
+				msg || `⏱ Monitor: todo al día en wave ${waveId} (${result.scannedPods} pods, ${readings.length} agentes bajo umbral).`,
+				msg ? "warning" : "info",
+			);
 		},
 	});
 
-	// Arm the deterministic watchdog clock — only in the supervisor session.
+	// Arm the deterministic watchdog clock — only in the monitor session.
 	function armWatchdog(ctx: ExtensionContext): void {
 		const secs = config.watchdogSeconds;
-		if (role !== "supervisor" || !secs || secs <= 0 || watchdogTimer) return;
+		if (role !== "monitor" || !secs || secs <= 0 || watchdogTimer) return;
 		ctx.ui.setStatus("fleet-watchdog", ctx.ui.theme.fg("muted", `⏱ watchdog ${secs}s`));
 		watchdogTimer = setInterval(async () => {
 			try {
-				const msg = await runWatchdogOnce(ctx.cwd);
+				const msg = await runWatchdogOnce(ctx);
 				if (msg && ctx.isIdle()) {
-					// Only nudge the supervisor when it's not mid-turn, to avoid interrupting.
+					// Only nudge the monitor when it's not mid-turn, to avoid interrupting.
 					pi.sendUserMessage(`${msg}\n\n(Watchdog automático — auditá vía architects; marcá STALE si no podés refrescar.)`);
 				}
 			} catch {

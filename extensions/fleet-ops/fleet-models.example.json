@@ -1,7 +1,7 @@
 {
   "roles": {
     "master": { "primary": "openai-codex/gpt-5.6-sol", "thinking": "xhigh" },
-    "supervisor": { "primary": "openrouter/minimax/minimax-v2.5-pro", "backup": "openrouter/z-ai/glm-5.3-flash" },
+    "monitor": { "primary": "openrouter/minimax/minimax-v2.5-pro", "backup": "openrouter/z-ai/glm-5.3-flash" },
     "architect": { "primary": "openai-codex/gpt-5.6-sol", "backup": "openrouter/qwen/qwen3.7-plus", "thinking": "high" },
     "worker": { "primary": "openrouter/deepseek/deepseek-v4-flash-0731", "backup": "openrouter/z-ai/glm-5.3-flash", "thinking": "high" },
     "reviewer": { "primary": "openai-codex/gpt-5.6-sol", "backup": "anthropic/claude-opus-4-8", "thinking": "high" },
@@ -13,5 +13,7 @@
     "statusCodes": [429, 503],
     "minErrorsToOffer": 2
   },
-  "watchdogSeconds": 60
+  "watchdogSeconds": 60,
+  "contextWarnPercent": 70,
+  "contextHighPercent": 85
 }

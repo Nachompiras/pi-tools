@@ -91,7 +91,8 @@ test("guessRole infers roles from agent handles", () => {
 	assert.equal(guessRole("fernolan_arch_a"), "architect");
 	assert.equal(guessRole("fernolan_worker_b1"), "worker");
 	assert.equal(guessRole("fernolan_review_a"), "reviewer");
-	assert.equal(guessRole("s00t2p_supervisor"), "supervisor");
+	assert.equal(guessRole("s00t2p_monitor"), "monitor");
+	assert.equal(guessRole("legacy_supervisor"), "monitor"); // back-compat name still maps
 	assert.equal(guessRole("s00t2p_test_worker_1"), "test-worker");
 	assert.equal(guessRole("random_name"), "agent");
 });
@@ -117,14 +118,14 @@ test("buildTeamTree renders master, pods, agents, and dependency section", () =>
 		waveId: "w",
 		pods: [a],
 		master: "fernolan_master",
-		supervisor: "fernolan_supervisor",
+		monitor: "fernolan_monitor",
 		liveAgents: [{ name: "fernolan_worker_a1", status: "working" }],
 	});
 	const txt = lines.join("\n");
 	assert.ok(txt.includes("fernolan_master"));
 	assert.ok(txt.includes("POD a"));
 	assert.ok(txt.includes("fernolan_worker_a1") && txt.includes("working")); // live status wins
-	assert.ok(txt.includes("fernolan_supervisor"));
+	assert.ok(txt.includes("fernolan_monitor"));
 	assert.ok(txt.includes("Dependencias:"));
 });
 

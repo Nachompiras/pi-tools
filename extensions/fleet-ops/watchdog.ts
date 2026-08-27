@@ -1,12 +1,12 @@
 /**
- * Deterministic watchdog for the supervisor session.
+ * Deterministic watchdog for the monitor session.
  *
- * The supervisor's whole job is auditing overdue entries. The push side of the
+ * The monitor's whole job is auditing overdue entries. The push side of the
  * protocol (architects notify on board change) can't catch a SILENTLY stalled
- * agent — it never pushes. So the supervisor runs a mechanical clock: every
+ * agent — it never pushes. So the monitor runs a mechanical clock: every
  * `watchdogSeconds`, scan every pod board and surface only entries whose
  * NEXT_CHECK_IN has passed. Nothing wakes the master; the reminder goes to the
- * supervisor, which then audits via the owning architect (never the worker).
+ * monitor, which then audits via the owning architect (never the worker).
  *
  * Pure + side-effect-free so it can be unit tested. The extension supplies the
  * boards, `now`, and does the actual messaging.
@@ -115,7 +115,7 @@ export function watchdogSignature(result: WatchdogResult): string {
 	return `O[${over}]U[${unp}]`;
 }
 
-/** Human-readable reminder body the supervisor sees. Empty string when all fresh. */
+/** Human-readable reminder body the monitor sees. Empty string when all fresh. */
 export function formatWatchdogMessage(result: WatchdogResult): string {
 	if (result.overdue.length === 0 && result.unparseable.length === 0) return "";
 	const lines: string[] = [];

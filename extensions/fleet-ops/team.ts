@@ -12,7 +12,7 @@
 
 import type { AgentRow, PodBoard } from "./parse.js";
 
-export type FleetRoleGuess = "architect" | "worker" | "reviewer" | "supervisor" | "test-worker" | "agent";
+export type FleetRoleGuess = "architect" | "worker" | "reviewer" | "monitor" | "test-worker" | "agent";
 
 /** A live agent as reported by `herdr agent list` (only the fields we use). */
 export interface LiveAgent {
@@ -25,7 +25,7 @@ export interface TeamInput {
 	waveId: string;
 	pods: PodBoard[];
 	master?: string; // master agent name, if known (e.g. FLEET_MASTER env or herdr)
-	supervisor?: string; // supervisor agent name, if known
+	monitor?: string; // monitor agent name, if known
 	testArchitect?: string;
 	testWorkers?: string[];
 	maxTestWorkers?: string;
@@ -37,7 +37,7 @@ export function guessRole(name: string): FleetRoleGuess {
 	const n = name.toLowerCase();
 	if (/(^|[_-])(arch|architect)([_-]|$)|_arch_/.test(n)) return "architect";
 	if (/review/.test(n)) return "reviewer";
-	if (/supervisor/.test(n)) return "supervisor";
+	if (/monitor|supervisor/.test(n)) return "monitor";
 	if (/test[_-]?worker/.test(n)) return "test-worker";
 	if (/worker/.test(n)) return "worker";
 	return "agent";
@@ -47,7 +47,7 @@ const ROLE_ICON: Record<FleetRoleGuess, string> = {
 	architect: "🏛",
 	worker: "👷",
 	reviewer: "👁",
-	supervisor: "🛰",
+	monitor: "🛰",
 	"test-worker": "🧪",
 	agent: "•",
 };
@@ -108,7 +108,7 @@ export function buildTeamTree(input: TeamInput): string[] {
 	lines.push("│");
 
 	input.pods.forEach((pod, pIdx) => {
-		const lastPod = pIdx === input.pods.length - 1 && !input.supervisor && !input.testArchitect;
+		const lastPod = pIdx === input.pods.length - 1 && !input.monitor && !input.testArchitect;
 		const branch = lastPod ? "└" : "├";
 		const base = pod.header["BASE SHA"] ? `  base ${pod.header["BASE SHA"].slice(0, 7)}` : "";
 		const arch = pod.header.ARCHITECT ? ` (${pod.header.ARCHITECT})` : "";
@@ -122,9 +122,9 @@ export function buildTeamTree(input: TeamInput): string[] {
 		lines.push(lastPod ? "" : "│");
 	});
 
-	if (input.supervisor) {
-		const st = liveStatusOf(input.supervisor, input.liveAgents) ?? "";
-		lines.push(`├─🛰 ${input.supervisor.padEnd(22)} supervisor  ${st}`.trimEnd());
+	if (input.monitor) {
+		const st = liveStatusOf(input.monitor, input.liveAgents) ?? "";
+		lines.push(`├─🛰 ${input.monitor.padEnd(22)} monitor     ${st}`.trimEnd());
 		lines.push("│");
 	}
 
