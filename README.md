@@ -121,7 +121,8 @@ Create `~/.pi/council.json` with your OpenRouter API key and the models you want
 | **verification-before-completion** | Use before claiming work is complete |
 | **frontend-design** | Create distinctive frontend interfaces with high design quality |
 | **subagent-driven-development** | Execute plans with parallel subagents and two-stage review |
-| **dispatching-parallel-agents** | Use when facing 2+ independent tasks |
+| **dispatching-parallel-agents** | Use when facing 2+ independent tasks (in-process subagents, one session) |
+| **orchestrating-agent-fleets** | Coordinate multiple long-lived agent sessions in parallel across git worktrees — master/architect/worker/reviewer pods + shared expensive-test dedup; runtime-agnostic (Herdr+Pi, ORCA, tmux) |
 | **executing-plans** | Execute multi-step tasks with review checkpoints |
 | **finishing-a-development-branch** | Complete development work - guides merge, PR, or cleanup |
 | **using-git-worktrees** | Feature work isolation from current workspace |
