@@ -95,17 +95,64 @@ function fmtTokens(n: number): string {
 	return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
 }
 
-/** Reminder body for context pressure. Empty when nothing crosses `warn`. */
-export function formatContextMessage(readings: ContextReading[], thresholds: ContextThresholds): string {
+export type ContextAction = "reset-safe" | "compact-keep" | "watch";
+
+/** Agent states where the context holds nothing reusable → clearing it is safe. */
+const DONE_STATES = /^(idle|offline|done|waiting_review|waiting_test)$/i;
+/** Agent states mid-work → keep context (a quick correction may need it) → compact. */
+const ACTIVE_STATES = /^(active|working|blocked|in_progress|review)$/i;
+
+/**
+ * Recommend what the MASTER should do about an agent's context, given its state.
+ * The percent says how urgent; the state says whether the context is worth keeping.
+ *   - over `high` + done/idle  → reset-safe  (task delivered; /new loses nothing)
+ *   - over `high` + active     → compact-keep (mid-task; checkpoint + /compact, keep it)
+ *   - over `warn`              → watch        (plan a reset after the next handoff)
+ */
+export function recommendContextAction(
+	percent: number,
+	state: string | undefined,
+	thresholds: ContextThresholds,
+): ContextAction | null {
+	if (percent >= thresholds.high) {
+		if (state && ACTIVE_STATES.test(state)) return "compact-keep";
+		if (state && DONE_STATES.test(state)) return "reset-safe";
+		return "compact-keep"; // unknown state at high pressure: safest is keep-and-compact
+	}
+	if (percent >= thresholds.warn) return "watch";
+	return null;
+}
+
+const ACTION_HINT: Record<ContextAction, string> = {
+	"reset-safe": "tarea entregada → reset seguro (/new); el contexto no aporta a trabajo en curso",
+	"compact-keep": "mid-task → checkpoint + /compact; MANTENER contexto por si hay corrección rápida",
+	watch: "vigilar; planear reset tras el próximo handoff",
+};
+
+/**
+ * Reminder body for context pressure. Empty when nothing crosses `warn`.
+ * Pass `stateOf` to turn each alert into an actionable compact-vs-reset call.
+ */
+export function formatContextMessage(
+	readings: ContextReading[],
+	thresholds: ContextThresholds,
+	stateOf?: (agent: string) => string | undefined,
+): string {
 	const alerts = contextAlerts(readings, thresholds);
 	if (alerts.length === 0) return "";
 	const lines: string[] = [];
-	lines.push(`🧠 Monitor: contexto alto en ${alerts.length} agente(s) — pedí checkpoint + reset antes de que se degraden.`);
+	lines.push(
+		`🧠 Monitor: contexto alto en ${alerts.length} agente(s). Avisá al master para decidir compact/reset por agente:`,
+	);
 	for (const r of alerts) {
 		const level = r.percent >= thresholds.high ? "ALTO" : "vigilar";
+		const state = stateOf?.(r.agent);
+		const action = recommendContextAction(r.percent, state, thresholds);
+		const hint = action ? ` → ${ACTION_HINT[action]}` : "";
 		lines.push(
 			`  • ${r.agent} ${r.percent}% (${fmtTokens(r.totalTokens)}/${fmtTokens(r.contextWindow)}) [${level}]` +
-				(r.modelId ? ` · ${r.modelId}` : ""),
+				(state ? ` estado=${state}` : "") +
+				hint,
 		);
 	}
 	return lines.join("\n");

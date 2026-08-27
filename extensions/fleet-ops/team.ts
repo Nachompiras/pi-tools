@@ -30,6 +30,7 @@ export interface TeamInput {
 	testWorkers?: string[];
 	maxTestWorkers?: string;
 	liveAgents?: LiveAgent[]; // from herdr; empty on non-herdr runtimes
+	contextOf?: (agent: string) => number | undefined; // agent → context percent, if known
 }
 
 /** Infer a role from an agent handle so the tree can icon/group it. */
@@ -88,14 +89,16 @@ export function collectEdges(pods: PodBoard[]): DepEdge[] {
 	return edges;
 }
 
-function agentLine(a: AgentRow, live: LiveAgent[] | undefined): string {
+function agentLine(a: AgentRow, live: LiveAgent[] | undefined, contextOf?: (agent: string) => number | undefined): string {
 	const role = guessRole(a.agent);
 	const icon = ROLE_ICON[role];
 	const liveStatus = liveStatusOf(a.agent, live);
 	// Prefer the live herdr status; fall back to the board's declared state.
 	const state = liveStatus ? liveStatus : a.state.toLowerCase();
 	const task = a.currentTask && a.currentTask !== "-" ? `  · ${a.currentTask}` : "";
-	return `${icon} ${a.agent.padEnd(22)} ${role.padEnd(11)} ${state}${task}`;
+	const pct = contextOf?.(a.agent);
+	const ctx = pct !== undefined ? `  ${pct}%ctx` : "";
+	return `${icon} ${a.agent.padEnd(22)} ${role.padEnd(11)} ${state}${ctx}${task}`;
 }
 
 export function buildTeamTree(input: TeamInput): string[] {
@@ -117,7 +120,7 @@ export function buildTeamTree(input: TeamInput): string[] {
 		if (pod.agents.length === 0) {
 			lines.push(`${pad}(sin agentes en el board)`);
 		} else {
-			pod.agents.forEach((a) => lines.push(`${pad}├ ${agentLine(a, input.liveAgents)}`));
+			pod.agents.forEach((a) => lines.push(`${pad}├ ${agentLine(a, input.liveAgents, input.contextOf)}`));
 		}
 		lines.push(lastPod ? "" : "│");
 	});

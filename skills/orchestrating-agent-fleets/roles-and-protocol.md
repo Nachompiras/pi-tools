@@ -298,6 +298,19 @@ Task boundary is the primary reset signal; context % is secondary.
 - **Test Architect:** retains the wave (board is state). **Test Workers:** fresh per execution; may retain for explicit retries.
 - Use compact to continue the same coherent work; use a fresh session to prevent contamination. Reset a confusing context even below thresholds.
 
+**Compact vs reset — decide by state, not just percent.** Maximizing per-task
+context utility is a real lever: sometimes keep the context (a quick correction
+may come), sometimes clear it (start fresh beats a polluted window). The monitor
+surfaces context pressure with a per-agent recommendation that crosses **percent
+× state**, and reports it to the **master**, who decides and orders the action
+(the monitor never resets a worker itself):
+- **High + delivered/idle** (task handed off, `WAITING_REVIEW/TEST`, done) →
+  **reset-safe**: the context holds nothing reusable for what's next; `/new`.
+- **High + mid-task** (`ACTIVE/working/blocked/IN_PROGRESS/REVIEW`) →
+  **compact-keep**: checkpoint + `/compact`, keep the context so a fast reviewer
+  correction doesn't re-read everything from scratch.
+- **Warn band** → **watch**: plan the reset for right after the next handoff.
+
 ## Communication boundaries
 
 - Master ↔ architects, Test Architect, Monitor.

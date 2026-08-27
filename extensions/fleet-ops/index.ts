@@ -103,23 +103,26 @@ async function herdrAgents(): Promise<LiveAgent[]> {
 }
 
 /**
- * Read every live agent's context usage from its session .jsonl.
- * `windowFor` resolves a model id to its context window (via modelRegistry).
+ * Read every live agent's context usage from its session .jsonl, plus a lookup
+ * of each agent's live state (from herdr) so the master can be told compact vs
+ * reset. `windowFor` resolves a model id to its context window.
  */
 async function gatherContextReadings(
 	windowFor: (modelId: string | undefined) => number,
-): Promise<ContextReading[]> {
+): Promise<{ readings: ContextReading[]; stateOf: (agent: string) => string | undefined }> {
 	const agents = await herdrAgentsFull();
 	const readings: ContextReading[] = [];
+	const states = new Map<string, string>();
 	for (const a of agents) {
 		if (!a.name || !a.sessionPath) continue;
+		if (a.status) states.set(a.name, a.status);
 		const jsonl = await readIfExists(a.sessionPath);
 		if (jsonl === null) continue;
 		const usage = parseSessionUsage(jsonl);
 		const reading = computeReading(a.name, usage, windowFor(usage?.modelId));
 		if (reading) readings.push(reading);
 	}
-	return readings;
+	return { readings, stateOf: (agent) => states.get(agent) };
 }
 
 async function pathExists(p: string): Promise<boolean> {
@@ -409,6 +412,10 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 		const testArchitect = live.find((a) => /test[_-]?arch/i.test(a.name))?.name;
 		const testWorkers = live.filter((a) => /test[_-]?worker/i.test(a.name)).map((a) => a.name);
 
+		// context % per agent (best-effort; empty off-herdr)
+		const { readings } = await gatherContextReadings(windowResolver(ctx));
+		const ctxMap = new Map(readings.map((r) => [r.agent, r.percent]));
+
 		const lines = buildTeamTree({
 			waveId,
 			pods,
@@ -418,6 +425,7 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 			testWorkers,
 			maxTestWorkers: maxTW,
 			liveAgents: live,
+			contextOf: (agent) => ctxMap.get(agent),
 		});
 		const theme = ctx.ui.theme;
 		const coloured = lines
@@ -471,13 +479,13 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 		const pods = await loadPodBoards(ctx.cwd, waveId);
 		if (pods.length === 0) return "";
 		const result = runWatchdog(pods, Date.now());
-		const readings = await gatherContextReadings(windowResolver(ctx));
+		const { readings, stateOf } = await gatherContextReadings(windowResolver(ctx));
 		const th = thresholds();
 		// dedup across BOTH signals: only nudge when the combined picture changed
 		const sig = `${watchdogSignature(result)}|${contextSignature(readings, th)}`;
 		if (sig === lastWatchdogSig) return "";
 		lastWatchdogSig = sig;
-		const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th)].filter(Boolean);
+		const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th, stateOf)].filter(Boolean);
 		return parts.join("\n\n");
 	}
 
@@ -488,9 +496,9 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 			if (!waveId) return;
 			const pods = await loadPodBoards(ctx.cwd, waveId);
 			const result = runWatchdog(pods, Date.now());
-			const readings = await gatherContextReadings(windowResolver(ctx));
+			const { readings, stateOf } = await gatherContextReadings(windowResolver(ctx));
 			const th = thresholds();
-			const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th)].filter(Boolean);
+			const parts = [formatWatchdogMessage(result), formatContextMessage(readings, th, stateOf)].filter(Boolean);
 			const msg = parts.join("\n\n");
 			ctx.ui.notify(
 				msg || `⏱ Monitor: todo al día en wave ${waveId} (${result.scannedPods} pods, ${readings.length} agentes bajo umbral).`,
@@ -509,7 +517,9 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 				const msg = await runWatchdogOnce(ctx);
 				if (msg && ctx.isIdle()) {
 					// Only nudge the monitor when it's not mid-turn, to avoid interrupting.
-					pi.sendUserMessage(`${msg}\n\n(Watchdog automático — auditá vía architects; marcá STALE si no podés refrescar.)`);
+					pi.sendUserMessage(
+						`${msg}\n\n(Watchdog automático. Acción del monitor: para check-ins vencidos, auditá vía el architect y marcá STALE si no podés refrescar. Para presión de contexto, AVISÁ AL MASTER por pi-peer con la recomendación por agente — reset-safe (entregó, /new), compact-keep (mid-task, /compact y mantener), o watch — para que decida y ordene el checkpoint/reset. No reseteés vos a los workers.)`,
+					);
 				}
 			} catch {
 				/* transient fs/parse error — next tick retries */

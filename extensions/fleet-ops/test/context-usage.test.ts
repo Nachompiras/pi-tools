@@ -7,6 +7,7 @@ import {
 	DEFAULT_CONTEXT_THRESHOLDS,
 	formatContextMessage,
 	parseSessionUsage,
+	recommendContextAction,
 } from "../context-usage.js";
 
 const TH = DEFAULT_CONTEXT_THRESHOLDS; // warn 70, high 85
@@ -61,6 +62,34 @@ test("formatContextMessage empty when all below warn, populated with levels", ()
 	assert.ok(msg.includes("contexto alto"));
 	assert.ok(msg.includes("c 90%") && msg.includes("ALTO"));
 	assert.ok(msg.includes("b 75%") && msg.includes("vigilar"));
+});
+
+test("recommendContextAction: state decides compact-keep vs reset-safe", () => {
+	// high pressure + delivered/idle → reset is safe (nothing to keep)
+	assert.equal(recommendContextAction(90, "idle", TH), "reset-safe");
+	assert.equal(recommendContextAction(90, "WAITING_REVIEW", TH), "reset-safe");
+	// high pressure + mid-task → keep context, compact (a correction may need it)
+	assert.equal(recommendContextAction(90, "working", TH), "compact-keep");
+	assert.equal(recommendContextAction(90, "IN_PROGRESS", TH), "compact-keep");
+	assert.equal(recommendContextAction(90, "blocked", TH), "compact-keep");
+	// unknown state at high pressure → safest is keep
+	assert.equal(recommendContextAction(90, undefined, TH), "compact-keep");
+	// between warn and high → watch
+	assert.equal(recommendContextAction(75, "working", TH), "watch");
+	// below warn → nothing
+	assert.equal(recommendContextAction(40, "working", TH), null);
+});
+
+test("formatContextMessage includes per-agent compact/reset recommendation from state", () => {
+	const readings = [
+		computeReading("done_worker", { totalTokens: 180000 }, 200000)!, // 90%
+		computeReading("busy_worker", { totalTokens: 184000 }, 200000)!, // 92%
+	];
+	const stateOf = (a: string) => (a === "done_worker" ? "idle" : "working");
+	const msg = formatContextMessage(readings, TH, stateOf);
+	assert.ok(msg.includes("avis") || msg.includes("Avis")); // "Avisá al master"
+	assert.ok(/done_worker.*reset seguro/s.test(msg));
+	assert.ok(/busy_worker.*MANTENER contexto/s.test(msg));
 });
 
 test("contextSignature is stable within a 5% bucket, changes crossing high", () => {
