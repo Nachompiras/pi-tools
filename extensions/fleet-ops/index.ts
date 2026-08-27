@@ -37,8 +37,48 @@ import {
 	type ProviderErrorObservation,
 	parseRetryAfter,
 } from "./failover-decision.js";
+import { buildTeamTree, type LiveAgent } from "./team.js";
+import { formatWatchdogMessage, runWatchdog, watchdogSignature } from "./watchdog.js";
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
+import type { PodBoard } from "./parse.js";
 
+const exec = promisify(execCb);
 const ORCH_DIR = ".orchestration";
+
+/** Load the parsed pod boards for a wave (shared by /equipo and the watchdog). */
+async function loadPodBoards(root: string, waveId: string): Promise<PodBoard[]> {
+	const dir = join(root, ORCH_DIR, `wave-${waveId}`);
+	if (!(await pathExists(dir))) return [];
+	const files = await readdir(dir);
+	const pods: PodBoard[] = [];
+	for (const f of files.filter((x) => /^pod-.+-kanban\.md$/.test(x)).sort()) {
+		const podName = f.replace(/^pod-/, "").replace(/-kanban\.md$/, "");
+		const md = await readIfExists(join(dir, f));
+		if (md !== null) pods.push(parsePodBoard(podName, md));
+	}
+	return pods;
+}
+
+/** Query `herdr agent list` for live agent state. Empty on non-herdr runtimes. */
+async function herdrAgents(): Promise<LiveAgent[]> {
+	if (process.env.HERDR_ENV !== "1") return [];
+	try {
+		const { stdout } = await exec("herdr agent list", { timeout: 5000 });
+		const parsed = JSON.parse(stdout);
+		const agents = parsed?.result?.agents ?? parsed?.agents ?? [];
+		if (!Array.isArray(agents)) return [];
+		return agents
+			.map((a: Record<string, unknown>) => ({
+				name: String(a.name ?? ""),
+				status: String(a.agent_status ?? a.status ?? ""),
+				paneId: a.pane_id ? String(a.pane_id) : undefined,
+			}))
+			.filter((a: LiveAgent) => a.name.length > 0);
+	} catch {
+		return [];
+	}
+}
 
 async function pathExists(p: string): Promise<boolean> {
 	try {
@@ -137,6 +177,7 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 		const candidate = (typeof flag === "string" && flag) || envRole;
 		role = isFleetRole(candidate) ? candidate : undefined;
 		if (role) ctx.ui.setStatus("fleet-role", ctx.ui.theme.fg("muted", `⛭ ${role}`));
+		armWatchdog(ctx);
 	});
 
 	pi.on("after_provider_response", async (event) => {
@@ -292,5 +333,120 @@ export default function fleetOpsExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("fleet-status", {
 		description: "Fleet wave progress (reads .orchestration/wave-<id>/)",
 		handler: handleComoVamos,
+	});
+
+	// Resolve a wave id from args, or auto-pick when there's exactly one.
+	async function resolveWave(args: string, ctx: ExtensionCommandContext): Promise<string | null> {
+		const given = args.trim();
+		if (given) return given;
+		const waves = await listWaves(ctx.cwd);
+		if (waves.length === 0) {
+			ctx.ui.notify("No hay waves activas (.orchestration/ vacío).", "info");
+			return null;
+		}
+		if (waves.length === 1) return waves[0];
+		if (ctx.hasUI) return (await ctx.ui.select(`¿Qué wave? (${waves.length})`, waves)) ?? null;
+		return waves[waves.length - 1];
+	}
+
+	async function handleEquipo(args: string, ctx: ExtensionCommandContext): Promise<void> {
+		const waveId = await resolveWave(args, ctx);
+		if (!waveId) return;
+		const pods = await loadPodBoards(ctx.cwd, waveId);
+		if (pods.length === 0) {
+			ctx.ui.notify(`Wave ${waveId}: sin pods (¿corriste fleet.sh pod ...?).`, "warning");
+			return;
+		}
+		const live = await herdrAgents();
+		const dir = join(ctx.cwd, ORCH_DIR, `wave-${waveId}`);
+		const testBoard = await readIfExists(join(dir, "test-pod-kanban.md"));
+		const maxTW = testBoard?.match(/MAX_TEST_WORKERS:\s*(\d+)/)?.[1];
+		// Best-effort: identify master/supervisor/test workers from live herdr names.
+		const master = live.find((a) => /master/i.test(a.name))?.name ?? process.env.FLEET_MASTER;
+		const supervisor = live.find((a) => /supervisor/i.test(a.name))?.name;
+		const testArchitect = live.find((a) => /test[_-]?arch/i.test(a.name))?.name;
+		const testWorkers = live.filter((a) => /test[_-]?worker/i.test(a.name)).map((a) => a.name);
+
+		const lines = buildTeamTree({
+			waveId,
+			pods,
+			master,
+			supervisor,
+			testArchitect,
+			testWorkers,
+			maxTestWorkers: maxTW,
+			liveAgents: live,
+		});
+		const theme = ctx.ui.theme;
+		const coloured = lines
+			.map((l) => {
+				if (l.startsWith("Wave ") || /^[├└]─■ POD/.test(l)) return theme.fg("accent", l);
+				if (l.includes("cross-pod")) return theme.fg("warning", l);
+				if (l.startsWith("🎛") || l.includes("Dependencias:")) return theme.fg("accent", l);
+				return l;
+			})
+			.join("\n");
+		ctx.ui.notify(coloured, "info");
+	}
+
+	pi.registerCommand("equipo", {
+		description: "Organigrama del equipo + grafo de dependencias de la wave",
+		handler: handleEquipo,
+	});
+	pi.registerCommand("fleet-graph", {
+		description: "Fleet team org chart + dependency graph (alias of /equipo)",
+		handler: handleEquipo,
+	});
+
+	// ---- supervisor watchdog (deterministic clock, only in the supervisor session) ----
+	let watchdogTimer: ReturnType<typeof setInterval> | undefined;
+	let lastWatchdogSig = "";
+
+	async function runWatchdogOnce(cwd: string): Promise<string> {
+		const waves = await listWaves(cwd);
+		if (waves.length === 0) return "";
+		const waveId = waves[waves.length - 1];
+		const pods = await loadPodBoards(cwd, waveId);
+		if (pods.length === 0) return "";
+		const result = runWatchdog(pods, Date.now());
+		const sig = watchdogSignature(result);
+		if (sig === lastWatchdogSig) return ""; // dedup: don't re-announce an unchanged overdue set
+		lastWatchdogSig = sig;
+		return formatWatchdogMessage(result);
+	}
+
+	pi.registerCommand("watchdog", {
+		description: "Forzar un chequeo de NEXT_CHECK_IN vencidos (supervisor)",
+		handler: async (args, ctx) => {
+			const waveId = await resolveWave(args, ctx);
+			if (!waveId) return;
+			const pods = await loadPodBoards(ctx.cwd, waveId);
+			const result = runWatchdog(pods, Date.now());
+			const msg = formatWatchdogMessage(result);
+			ctx.ui.notify(msg || `⏱ Watchdog: todo al día en wave ${waveId} (${result.scannedPods} pods).`, msg ? "warning" : "info");
+		},
+	});
+
+	// Arm the deterministic watchdog clock — only in the supervisor session.
+	function armWatchdog(ctx: ExtensionContext): void {
+		const secs = config.watchdogSeconds;
+		if (role !== "supervisor" || !secs || secs <= 0 || watchdogTimer) return;
+		ctx.ui.setStatus("fleet-watchdog", ctx.ui.theme.fg("muted", `⏱ watchdog ${secs}s`));
+		watchdogTimer = setInterval(async () => {
+			try {
+				const msg = await runWatchdogOnce(ctx.cwd);
+				if (msg && ctx.isIdle()) {
+					// Only nudge the supervisor when it's not mid-turn, to avoid interrupting.
+					pi.sendUserMessage(`${msg}\n\n(Watchdog automático — auditá vía architects; marcá STALE si no podés refrescar.)`);
+				}
+			} catch {
+				/* transient fs/parse error — next tick retries */
+			}
+		}, secs * 1000);
+		if (typeof watchdogTimer.unref === "function") watchdogTimer.unref();
+	}
+
+	pi.on("session_shutdown", async () => {
+		if (watchdogTimer) clearInterval(watchdogTimer);
 	});
 }

@@ -12,5 +12,6 @@
     "autoSwitch": false,
     "statusCodes": [429, 503],
     "minErrorsToOffer": 2
-  }
+  },
+  "watchdogSeconds": 60
 }

@@ -28,6 +28,8 @@ export interface OnProviderError {
 export interface FleetModelsConfig {
 	roles: Partial<Record<FleetRole, RoleModels>>;
 	onProviderError: OnProviderError;
+	/** Supervisor watchdog interval in seconds. 0 disables the timer. Default 60. */
+	watchdogSeconds: number;
 }
 
 export interface ModelRef {
@@ -73,6 +75,7 @@ export const DEFAULT_CONFIG: FleetModelsConfig = {
 		},
 	},
 	onProviderError: DEFAULT_ON_PROVIDER_ERROR,
+	watchdogSeconds: 60,
 };
 
 const VALID_ROLES: readonly FleetRole[] = [
@@ -105,9 +108,14 @@ export function mergeConfig(raw: unknown): FleetModelsConfig {
 	const out: FleetModelsConfig = {
 		roles: { ...DEFAULT_CONFIG.roles },
 		onProviderError: { ...DEFAULT_ON_PROVIDER_ERROR },
+		watchdogSeconds: DEFAULT_CONFIG.watchdogSeconds,
 	};
 	if (!raw || typeof raw !== "object") return out;
 	const obj = raw as Record<string, unknown>;
+
+	if (typeof obj.watchdogSeconds === "number" && obj.watchdogSeconds >= 0) {
+		out.watchdogSeconds = obj.watchdogSeconds;
+	}
 
 	if (obj.roles && typeof obj.roles === "object") {
 		for (const [role, val] of Object.entries(obj.roles as Record<string, unknown>)) {

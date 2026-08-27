@@ -52,7 +52,7 @@ test("mergeConfig overlays user config and drops malformed roles", () => {
 });
 
 test("mergeConfig on garbage returns shipped defaults", () => {
-	assert.deepEqual(mergeConfig(null), { roles: { ...DEFAULT_CONFIG.roles }, onProviderError: { ...DEFAULT_CONFIG.onProviderError } });
+	assert.deepEqual(mergeConfig(null), { roles: { ...DEFAULT_CONFIG.roles }, onProviderError: { ...DEFAULT_CONFIG.onProviderError }, watchdogSeconds: DEFAULT_CONFIG.watchdogSeconds });
 	assert.deepEqual(mergeConfig("nope").roles.worker, DEFAULT_CONFIG.roles.worker);
 });
 

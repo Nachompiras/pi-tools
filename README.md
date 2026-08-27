@@ -70,7 +70,7 @@ These custom definitions work alongside Tintinweb's built-in `general-purpose`, 
 | **council** | Multi-model review council — sends a spec/plan/code file to multiple LLMs via OpenRouter, runs a 3-stage pipeline (independent review → anonymous peer ranking → chairman synthesis) |
 | **agent-config** | Configure agent model, thinking level, and max turns without editing markdown files; validates names, creates timestamped backups, and uses atomic writes with `0600` permissions on POSIX |
 | **token-speed** | Preserves Pi's built-in footer and adds live TPS, session-average TPS, and average TTFT |
-| **fleet-ops** | Master-side companion to the `orchestrating-agent-fleets` skill. `/como-vamos [wave]` (alias `/fleet-status`) reads `.orchestration/wave-<id>/` and prints per-pod task/agent progress, pod handoff readiness (silent-failure guard), Test Pod evidence, and a "needs attention" list (blocked agents, idle capacity with pending work, stale boards, failed tests) |
+| **fleet-ops** | Companion to the `orchestrating-agent-fleets` skill. `/como-vamos [wave]` (alias `/fleet-status`) — per-pod progress, in-flight work per agent, handoff readiness (silent-failure guard), Test Pod evidence, needs-attention list. `/equipo [wave]` (alias `/fleet-graph`) — team org chart + dependency graph, with live agent state from `herdr agent list`. `/switch-backup` — failover the session to its role's backup model (config `.pi/fleet-models.json`; role via `--fleet-role`/`FLEET_ROLE`); also auto-offers on 429/503. `/watchdog` + a deterministic supervisor-only timer (`watchdogSeconds`, default 60) that surfaces overdue `NEXT_CHECK_IN` entries without involving the master |
 
 #### Council Setup
 

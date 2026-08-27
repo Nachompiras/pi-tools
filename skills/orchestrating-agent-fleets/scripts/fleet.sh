@@ -278,6 +278,62 @@ cmd_check() {
   printf '  all expected pod handoffs present — safe to review for integration\n'
 }
 
+# Scan every pod board and print only entries whose NEXT_CHECK_IN is in the past.
+# Deterministic; the supervisor session runs this on a timer. exit 3 if any overdue.
+# Only ISO-8601 timestamps are compared (HH:MM is ambiguous without a date here);
+# the TypeScript watchdog in the extension handles HH:MM. This CLI is a convenience.
+cmd_watch() {
+  [ $# -eq 1 ] || die "watch needs <wave-id>"
+  wave="$1"; d="$(wave_dir "$wave")"
+  [ -d "$d" ] || die "wave $wave not initialized"
+  now_epoch=$(date +%s)
+  found=0
+  printf '=== watchdog wave %s (now=%s) ===\n' "$wave" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  for board in "$d"/pod-*-kanban.md; do
+    [ -f "$board" ] || continue
+    pod=$(basename "$board" | sed 's/^pod-//; s/-kanban\.md$//')
+    # table rows: split on |, look at last non-empty column (NEXT_CHECK_IN) and col 2 (state/status)
+    while IFS= read -r line; do
+      case "$line" in
+        \|*\|)
+          # skip separator rows
+          case "$line" in *---*) continue ;; esac
+          id=$(printf '%s' "$line" | awk -F'|' '{gsub(/^ +| +$/,"",$2); print $2}')
+          state=$(printf '%s' "$line" | awk -F'|' '{gsub(/^ +| +$/,"",$3); print $3}')
+          nci=$(printf '%s' "$line" | awk -F'|' '{n=NF-1; gsub(/^ +| +$/,"",$n); print $n}')
+          # header rows
+          case "$id" in AGENT|"TASK ID") continue ;; esac
+          case "$state" in OFFLINE|DONE|BACKLOG) continue ;; esac
+          # only compare ISO timestamps (contain 'T' and '-')
+          case "$nci" in
+            *-*T*)
+              due_epoch=$(iso_to_epoch "$nci")
+              [ -n "$due_epoch" ] || continue
+              if [ "$now_epoch" -gt "$due_epoch" ]; then
+                over=$(( (now_epoch - due_epoch) / 60 ))
+                printf '  OVERDUE  %-4s %-16s [%s]  NEXT_CHECK_IN %s  (%sm)\n' "$pod" "$id" "$state" "$nci" "$over"
+                found=1
+              fi
+              ;;
+          esac
+          ;;
+      esac
+    done < "$board"
+  done
+  if [ "$found" -eq 0 ]; then
+    printf '  all NEXT_CHECK_IN fresh (ISO-dated entries)\n'
+    return 0
+  fi
+  printf '  — audit overdue entries via each pod architect; mark STALE if unrefreshable\n'
+  exit 3
+}
+
+# Portable ISO-8601 (UTC 'Z') to epoch seconds; empty on failure.
+iso_to_epoch() {
+  # try GNU date, then BSD date
+  date -u -d "$1" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$1" +%s 2>/dev/null || true
+}
+
 cmd_status() {
   [ $# -eq 1 ] || die "status needs <wave-id>"
   wave="$1"; d="$(wave_dir "$wave")"
@@ -312,12 +368,13 @@ cmd_status() {
 
 # ---------------------------------------------------------------------------
 
-[ $# -ge 1 ] || die "usage: fleet.sh <init|expect|check|pod|worktree|overlap|test-key|test-check|test-record|status> ..."
+[ $# -ge 1 ] || die "usage: fleet.sh <init|expect|check|watch|pod|worktree|overlap|test-key|test-check|test-record|status> ..."
 sub="$1"; shift
 case "$sub" in
   init)         cmd_init "$@" ;;
   expect)       cmd_expect "$@" ;;
   check)        cmd_check "$@" ;;
+  watch)        cmd_watch "$@" ;;
   pod)          cmd_pod "$@" ;;
   worktree)     cmd_worktree "$@" ;;
   overlap)      cmd_overlap "$@" ;;
