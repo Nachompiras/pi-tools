@@ -61,6 +61,41 @@ Master Orchestrator ── owns plan, git integration, approvals, capacity
 Only the **master** loads skills / owns the plan. Subordinate sessions start
 lean (no skills) and focus on execution. Roles and rules: `roles-and-protocol.md`.
 
+## Zero-Friction Kickoff (you run everything, the user just answers)
+
+You are the master. Do NOT hand `fleet.sh` commands to the user or ask them to
+provision anything — **you run every command yourself** via the bash tool. The
+script resolves from this skill's directory. The user's only job is to answer a
+few decisions and approve protected actions.
+
+When this skill starts (typically chosen at the end of `writing-plans`):
+
+1. **Locate the helper.** Resolve `SKILL_DIR/scripts/fleet.sh` (this file's
+   directory). Use that absolute path in every bash call below.
+2. **Draw the graph** from the approved plan (§1). Propose the pod split to the
+   user in one message: pod names, owned subsystems, and any data/resource edges
+   you found. Ask them to confirm or adjust.
+3. **Ask the few things only the user knows** (batch them into one question set):
+   - wave id (propose one, e.g. `001` or a short slug)
+   - `MAX_TEST_WORKERS` (propose a default of 2)
+   - which agent runtime they're on (Herdr+Pi / ORCA / tmux) → picks the adapter
+   - anything ambiguous about ownership or protected actions
+4. **Prove independence and scaffold — you run these**, not the user:
+   ```sh
+   sh "$FLEET" overlap "<globsA>" "<globsB>"   # abort the split if exit 2
+   sh "$FLEET" init <wave> <max-test-workers>
+   sh "$FLEET" expect <wave> <pod>...
+   sh "$FLEET" pod <wave> <pod> "<architect-name>"
+   sh "$FLEET" worktree <wave> <pod> integration|worker <n>|review
+   ```
+5. **Spawn the sessions** per `runtime-adapters.md` for the chosen runtime, then
+   dispatch one workstream contract to each architect.
+6. Tell the user they can watch progress anytime with **`/como-vamos`** and that
+   you'll stop for approval on protected actions.
+
+The detailed protocol for each step is below; the steps above are the default
+run order so the user experiences a single guided flow, not a command list.
+
 ## The Workflow
 
 ### 1. Draw the graph, then prove independence (master)

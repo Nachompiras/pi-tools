@@ -182,11 +182,13 @@ If you find issues, fix them inline. No need to re-review — just fix and move 
 
 After saving the plan, offer execution choice:
 
-**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Two execution options:**
+**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Three execution options:**
 
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
+**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration (in-process subagents, one session)
 
 **2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
+
+**3. Agent Fleet (Herdr/ORCA)** - Multiple long-lived agent sessions in parallel across isolated git worktrees: architect/worker/reviewer pods + a shared Test Pod. For large plans that decompose into independent workstreams and outlive one context window.
 
 **Which approach?"**
 
@@ -197,3 +199,9 @@ After saving the plan, offer execution choice:
 **If Inline Execution chosen:**
 - **REQUIRED SUB-SKILL:** Use superpowers:executing-plans
 - Batch execution with checkpoints for review
+
+**If Agent Fleet chosen:**
+- **REQUIRED SUB-SKILL:** Use orchestrating-agent-fleets
+- You become the master orchestrator: draw the dependency graph, then run the
+  automated wave setup (`scripts/fleet.sh`) yourself and provision pods.
+  Do NOT hand fleet.sh commands to the user — you run them.
