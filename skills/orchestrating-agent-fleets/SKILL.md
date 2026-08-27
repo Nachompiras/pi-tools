@@ -63,15 +63,33 @@ lean (no skills) and focus on execution. Roles and rules: `roles-and-protocol.md
 
 ## The Workflow
 
-### 1. Plan and prove independence (master)
-Complete `brainstorming` + `writing-plans` first. Partition the approved plan into
-pods whose **file scopes do not overlap**. Prove it mechanically before dispatch:
+### 1. Draw the graph, then prove independence (master)
+Complete `brainstorming` + `writing-plans` first. The master's first job is not to
+write code — it's to draw the dependency graph. Nodes are pods (or worker tasks);
+an edge is a REAL dependency, never an "and then". For every "A and then B", apply
+the edge test:
+
+> Does B actually read A's output?
+> - **yes → DATA EDGE** — serialize: same pod, or pod B's base SHA = A's integrated SHA (B waits)
+> - **no → no data edge** — candidate for a parallel pod
+
+A no-data-edge pair is only truly independent if it also shares no **resource**
+(same DB/staging, a rate-limited API, one migration sequence, a shared config/port).
+That's a hidden edge — see `roles-and-protocol.md` §Graph decomposition. Declare
+shared non-file resources in the workstream contract and serialize on them.
+
+Then prove the file side mechanically before dispatch:
 
 ```sh
 scripts/fleet.sh overlap "src/auth/**,src/session/**" "src/payments/**"
-# exit 0 = independent, safe to parallelize; exit 2 = shared files, serialize
+# exit 0 = no shared files; exit 2 = shared files (a resource edge), serialize
 ```
-Shared-file or sequentially dependent work stays in **one** pod or waits.
+Shared-file, shared-resource, or sequentially dependent work stays in **one** pod
+or waits. Register the pods you expect so integration can detect a missing one:
+
+```sh
+scripts/fleet.sh expect <wave-id> a b        # declare the wave's expected pods
+```
 
 ### 2. Scaffold the wave (master)
 ```sh
@@ -114,6 +132,12 @@ Identity = `SHA + COMMAND + ENV + CONFIG`. A failed run is valid evidence — ne
 retry silently. Rules: `roles-and-protocol.md` §Test Pod.
 
 ### 7. Integrate the wave (master)
+Before integrating, verify every expected pod handoff actually arrived — a fleet
+can produce a wave that *looks* complete while one pod silently failed:
+
+```sh
+scripts/fleet.sh check <wave-id>    # expected pods vs handoffs found; exit 2 if any missing
+```
 Master reviews cross-pod compatibility, integrates only reviewer-approved pod
 SHAs sequentially, and requests only wave-final evidence for the integrated SHA.
 Protected actions (prod, real DB, secrets, deploy, destructive) stop for **direct
@@ -132,6 +156,8 @@ is the primary reset signal, % is secondary.
 | New pod board | `fleet.sh pod <id> <pod> <architect> [base]` |
 | Writer worktree | `fleet.sh worktree <id> <pod> integration\|worker\|review\|test ...` |
 | Prove pods independent | `fleet.sh overlap "<globsA>" "<globsB>"` |
+| Declare expected pods | `fleet.sh expect <id> <pod>...` |
+| Check all handoffs arrived | `fleet.sh check <id>` |
 | Dedup key | `fleet.sh test-key <sha> "<cmd>" "<env>" "<cfg>"` |
 | Check before expensive test | `fleet.sh test-check <id> <sha> "<cmd>" "<env>" "<cfg>"` |
 | Record evidence | `fleet.sh test-record <id> <sha> "<cmd>" "<env>" "<cfg>" <status> <path> [worker]` |
@@ -143,6 +169,12 @@ is the primary reset signal, % is secondary.
   Supervisor alerts, not relay every worker message. Route status *inside* the pod.
 - **Parallel pods that share files.** Worktrees prevent index races, not logical
   merge conflicts. Run `overlap` first; serialize anything that overlaps.
+- **False independence (hidden resource edge).** Two pods whose prompts never
+  reference each other still collide on a shared DB, a rate-limited API, one
+  migration sequence, or a shared config/port. `overlap` only sees git-tracked
+  files — audit resources too, and serialize on them.
+- **Silent pod failure.** One missing handoff vanishes into a wave that looks
+  done. Run `fleet.sh check` before integration; never integrate partial.
 - **Rerunning an expensive test that already has evidence.** Always `test-check`
   first. Diligence ≠ re-executing the same identity.
 - **Retrying a failed test silently.** A failure is evidence. Retries are explicit,

@@ -19,6 +19,29 @@ between sessions (see `runtime-adapters.md`).
 - Reserve skills, specs, and plans for the master; subordinates only execute.
 - Stop for direct user approval on protected actions.
 
+## Graph decomposition (master, before dispatch)
+
+Model the initiative as a graph: pods are nodes, dependencies are edges. The
+master owns the edges; the agents fill in the nodes. There are exactly two kinds
+of edge, and they resolve differently:
+
+- **DATA EDGE** — pod B needs pod A's output. Cannot parallelize. Either keep both
+  in one pod, or set B's base SHA to A's integrated SHA (B waits on A).
+- **RESOURCE EDGE** — two pods write the same file, hit the same rate-limited API,
+  share a migration sequence, a staging DB, a port, or a config file. No data
+  crosses, but they still conflict. Parallelize ONLY if the resource is isolated
+  (separate worktree, separate test env, separate DB); otherwise serialize.
+
+The edge test for every "A and then B": *does B actually read A's output?* If yes,
+it's a data edge. If no, it's not — check for a resource edge; if none, they are
+independent and every such pair you run in sequence is free speed lost. Split it
+into parallel pods.
+
+`fleet.sh overlap` proves the *file* slice of resource independence mechanically.
+Non-file resources (DB/API/migrations/ports/config) are not git-visible — the
+architect must declare them in the workstream contract (`SHARED RESOURCES`) and
+the master serializes on them.
+
 ## Roles
 
 ### Master orchestrator
@@ -91,14 +114,16 @@ BASE SHA:
 OWNED SUBSYSTEM:
 ACCEPTANCE CRITERIA:
 FILES/AREAS RESERVED:
+SHARED RESOURCES (DB/API/migrations/ports/config):
 DEPENDENCIES:
 FOCUSED TESTS OWNED BY THE POD:
 EXPENSIVE GATES OWNED BY THE TEST POD:
 FORBIDDEN ACTIONS:
 RISK LEVEL:
 ```
-A pod may start only when its owned files + dependencies do not overlap another
-active pod (`fleet.sh overlap`).
+A pod may start only when its owned files, shared resources, and dependencies do
+not overlap another active pod (`fleet.sh overlap` covers the file slice; the
+master resolves resource and data edges).
 
 ### Test request (any agent → Test Architect)
 ```text
@@ -214,6 +239,10 @@ Pod → master handoff adds:
 POD: / OBJECTIVE: / BASE SHA: / FINAL SHA: / COMMITS INCLUDED: / FOCUSED TEST EVIDENCE:
 EXPENSIVE TEST EXECUTION KEYS: / REVIEW VERDICT: / MIGRATIONS/ROLLOUT: / KNOWN RISKS: / CROSS-POD IMPACT:
 ```
+The architect writes the pod → master handoff to
+`.orchestration/wave-<id>/pod-<p>-handoff.md`. That file is what `fleet.sh check`
+counts against the expected pods — its presence signals the pod is done.
+
 Messages carry bounded instructions/notices/status/handoffs. Git commits, plans,
 evidence, and test output are authoritative. Large payloads live in a file
 referenced by path, never pasted through messages.
@@ -249,14 +278,27 @@ verdict; no uncommitted changes in worker/integration worktrees; exact SHAs +
 focused commands + execution keys in the handoff; a current kanban; no duplicate
 expensive execution for an existing key.
 
-Wave cannot integrate to `main` without: every required pod handoff; cross-pod
-conflict + dependency review; final-SHA evidence for wave-level lint/typecheck/
+Wave cannot integrate to `main` without: every required pod handoff, verified by
+count against the expected pods (`fleet.sh check` — never integrate partial);
+cross-pod conflict + dependency review; final-SHA evidence for wave-level lint/typecheck/
 tests/build appropriate to the changed scope; migration/rollout notes; direct user
 approval for protected operations. The master verifies evidence identity and
 coverage — it does not re-run the same identity to look diligent.
 
 ## Failure handling
 
+- **False independence (hidden resource edge):** pods that share a DB, API quota,
+  migration order, port, or config conflict even with zero data dependency.
+  `fleet.sh overlap` covers files only — the architect declares shared non-file
+  resources in the contract (`SHARED RESOURCES`) and the master serializes on them.
+- **Silent pod failure:** in a fleet, one missing pod handoff can vanish into a
+  wave that looks complete. Declare expected pods (`fleet.sh expect`) and verify
+  received handoffs against them (`fleet.sh check`) before wave integration; flag
+  gaps explicitly, never integrate partial.
+- **Context collapse at fan-in:** never feed raw worker transcripts up to the
+  master. Fan-in is layered by design — workers → architect (pod handoff) → master
+  (consolidated). For very large pods, the architect summarizes worker batches
+  before its own handoff rather than forwarding everything.
 - **Blocked approval/question:** escalate architect → master → user if authority needed.
 - **Worker stalled:** redirect once; else request partial handoff, update board, reset, reassign in-pod.
 - **Idle worker:** Supervisor reports same-pod candidates; master issues the assignment.

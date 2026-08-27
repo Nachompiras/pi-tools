@@ -11,6 +11,8 @@
 #
 # Usage:
 #   fleet.sh init <wave-id> [max-test-workers]
+#   fleet.sh expect <wave-id> <pod>...            declare expected pods for the wave
+#   fleet.sh check  <wave-id>                     expected pods vs handoffs found (silent-failure guard)
 #   fleet.sh pod  <wave-id> <pod-name> <architect> [base-sha]
 #   fleet.sh worktree <wave-id> <pod> <role> [n] [base-sha]
 #       role = integration | worker | review | test
@@ -238,6 +240,44 @@ cmd_test_record() {
   printf 'fleet: recorded %s status=%s attempt=%s evidence=%s\n' "$key" "$status" "$attempt" "$evidence"
 }
 
+cmd_expect() {
+  [ $# -ge 2 ] || die "expect needs <wave-id> <pod>... (space-separated expected pod names)"
+  wave="$1"; shift
+  d="$(wave_dir "$wave")"
+  [ -d "$d" ] || die "wave $wave not initialized — run: fleet.sh init $wave"
+  : > "$d/expected-pods"
+  for p in "$@"; do printf '%s\n' "$p" >> "$d/expected-pods"; done
+  printf 'fleet: wave %s expects %s pod(s): %s\n' "$wave" "$#" "$*"
+}
+
+# A pod handoff is the file .orchestration/wave-<id>/pod-<p>-handoff.md.
+# Architects write it when their pod handoff to the master is complete.
+cmd_check() {
+  [ $# -eq 1 ] || die "check needs <wave-id>"
+  wave="$1"; d="$(wave_dir "$wave")"
+  [ -d "$d" ] || die "wave $wave not initialized"
+  exp="$d/expected-pods"
+  [ -f "$exp" ] || die "no expected pods declared — run: fleet.sh expect $wave <pod>..."
+  printf '=== wave %s integration readiness ===\n' "$wave"
+  missing=""
+  found=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if [ -f "$d/pod-$p-handoff.md" ]; then
+      found="$found $p"
+    else
+      missing="$missing $p"
+    fi
+  done < "$exp"
+  printf '  expected pods: %s\n' "$(tr '\n' ' ' < "$exp")"
+  printf '  handoffs found:%s\n' "${found:- (none)}"
+  if [ -n "$missing" ]; then
+    printf '  MISSING:%s  — DO NOT integrate; silent gap detected\n' "$missing"
+    exit 2
+  fi
+  printf '  all expected pod handoffs present — safe to review for integration\n'
+}
+
 cmd_status() {
   [ $# -eq 1 ] || die "status needs <wave-id>"
   wave="$1"; d="$(wave_dir "$wave")"
@@ -247,6 +287,20 @@ cmd_status() {
   ls -1 "$d"/*.md 2>/dev/null | sed 's/^/  /' || printf '  (none)\n'
   printf -- '--- worktrees ---\n'
   git worktree list | grep "wave-$wave" | sed 's/^/  /' || printf '  (none)\n'
+  printf -- '--- pods (expected vs handoffs) ---\n'
+  exp="$d/expected-pods"
+  if [ -f "$exp" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if [ -f "$d/pod-$p-handoff.md" ]; then
+        printf '  %-12s HANDOFF\n' "$p"
+      else
+        printf '  %-12s pending\n' "$p"
+      fi
+    done < "$exp"
+  else
+    printf '  (no expected pods declared — run: fleet.sh expect %s <pod>...)\n' "$wave"
+  fi
   printf -- '--- test registry ---\n'
   reg="$d/test-registry.tsv"
   if [ -f "$reg" ]; then
@@ -258,10 +312,12 @@ cmd_status() {
 
 # ---------------------------------------------------------------------------
 
-[ $# -ge 1 ] || die "usage: fleet.sh <init|pod|worktree|overlap|test-key|test-check|test-record|status> ..."
+[ $# -ge 1 ] || die "usage: fleet.sh <init|expect|check|pod|worktree|overlap|test-key|test-check|test-record|status> ..."
 sub="$1"; shift
 case "$sub" in
   init)         cmd_init "$@" ;;
+  expect)       cmd_expect "$@" ;;
+  check)        cmd_check "$@" ;;
   pod)          cmd_pod "$@" ;;
   worktree)     cmd_worktree "$@" ;;
   overlap)      cmd_overlap "$@" ;;

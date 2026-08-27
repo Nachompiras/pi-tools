@@ -7,11 +7,13 @@
     "pi-package"
   ],
   "scripts": {
-    "test": "npm run test:subagents && npm run test:council-adapters && npm run test:token-speed && npm run test:agent-config",
+    "test": "npm run test:subagents && npm run test:council-adapters && npm run test:token-speed && npm run test:agent-config && npm run test:fleet-ops",
     "test:subagents": "node --test tests/tintinweb-subagents-restoration.test.mjs",
     "test:council-adapters": "tsx tests/council-adapters.test.ts",
     "test:token-speed": "tsx tests/token-speed.test.ts",
     "test:agent-config": "vitest run --config extensions/agent-config/vitest.config.ts",
+    "test:fleet-ops": "tsx --test extensions/fleet-ops/test/*.test.ts",
+    "typecheck:fleet-ops": "tsc --noEmit --project extensions/fleet-ops/tsconfig.json",
     "typecheck:agent-config": "tsc --noEmit --project extensions/agent-config/tsconfig.json",
     "test:council-e2e": "tsx extensions/council/council.test.ts"
   },
