@@ -126,6 +126,7 @@ Create `~/.pi/council.json` with your OpenRouter API key and the models you want
 | **orchestrating-agent-fleets** | Coordinate multiple long-lived agent sessions in parallel across git worktrees — master/architect/worker/reviewer pods + shared expensive-test dedup; runtime-agnostic (Herdr+Pi, ORCA, tmux) |
 | **executing-plans** | Execute multi-step tasks with review checkpoints |
 | **finishing-a-development-branch** | Complete development work - guides merge, PR, or cleanup |
+| **pr** | Write a PR body that's fast to review (Summary, Evidence, Merge Danger) |
 | **using-git-worktrees** | Feature work isolation from current workspace |
 | **writing-skills** | Create new skills or edit existing ones |
 | **find-skills** | Discover and install agent skills |
