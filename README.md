@@ -110,7 +110,7 @@ Create `~/.pi/council.json` with your OpenRouter API key and the models you want
 
 | Skill | Description |
 |-------|-------------|
-| **brainstorming** | Creative work - explores intent, requirements and design before implementation |
+| **brainstorming** | Non-trivial creative work - explores intent, requirements and design before implementation (skipped for maintenance, analysis and small diffs) |
 | **systematic-debugging** | Use for any bug, test failure, or unexpected behavior - find root cause first |
 | **rust-review** | Review Rust code for clippy warnings, idiomatic patterns, error handling, performance |
 | **rust-perf** | Deep performance audit and optimization for Rust projects |
@@ -130,7 +130,7 @@ Create `~/.pi/council.json` with your OpenRouter API key and the models you want
 | **using-git-worktrees** | Feature work isolation from current workspace |
 | **writing-skills** | Create new skills or edit existing ones |
 | **find-skills** | Discover and install agent skills |
-| **using-superpowers** | Establish how to find and use skills |
+| **using-superpowers** | Triage each request (maintenance/analysis → no skills, small diff → direct, otherwise → full flow) and establish how to use skills |
 | **improve-codebase-architecture** | Find deepening opportunities — refactors that turn shallow modules into deep ones for testability and AI-navigability |
 
 ### Prompt Templates
